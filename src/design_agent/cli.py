@@ -49,6 +49,60 @@ def doctor(as_json: bool) -> None:
     sys.exit(doctor_main(_root(), as_json=as_json))
 
 
+@main.command("files")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8132, type=click.IntRange(1, 65535), show_default=True)
+def serve_files(host: str, port: int) -> None:
+    """Serve delivered files through capability links, without running an agent."""
+    import uvicorn
+
+    from design_agent.runtime.persistence import workspace_of
+    from design_agent.surfaces.files import create_files_app
+
+    out = workspace_of(Settings(), _root()) / "out"
+    uvicorn.run(create_files_app(out), host=host, port=port, access_log=False)
+
+
+@main.command("configure-chatgpt")
+@click.option("--model", default="gpt-6.1-sol", show_default=True)
+@click.option("--port", default=1456, type=click.IntRange(1, 65535), show_default=True)
+def configure_chatgpt(model: str, port: int) -> None:
+    """Use your own ChatGPT subscription through an installed mcodex account pool."""
+    from design_agent.subscription import configure
+
+    configure(_root(), model=model, port=port)
+    click.echo("Configured local ChatGPT text and image endpoints. Run design-agent chat.")
+
+
+@main.command("proxy")
+def subscription_proxy() -> None:
+    """Run the loopback mcodex proxy for text and images."""
+    from design_agent.subscription import run_proxy
+
+    sys.exit(run_proxy(_root()))
+
+
+@main.command("chat")
+@click.option("--thread", default=None, help="Continue a specific thread.")
+@click.option("--new", is_flag=True, help="Start a new thread.")
+def terminal_chat(thread: str | None, new: bool) -> None:
+    """Open the official Deep Agents Code TUI with the Design Agent graph."""
+    import importlib.util
+
+    if sys.version_info < (3, 12) or importlib.util.find_spec("deepagents_code") is None:
+        raise click.ClickException("Install the TUI: uv sync --extra terminal --python 3.13")
+    from dotenv import load_dotenv
+
+    from design_agent.subscription import ensure_proxy
+    from design_agent.surfaces.terminal import run
+
+    root = _root()
+    load_dotenv(root / ".env", override=True)
+    settings = Settings()
+    with ensure_proxy(root, settings):
+        asyncio.run(run(root, settings, thread=thread, new=new))
+
+
 @main.command()
 @click.argument("request")
 @click.option("--thread", "thread_id", default=None, help="Continue a thread by id.")

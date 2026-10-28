@@ -1,10 +1,10 @@
 [project]
 name = "design-agent"
-version = "0.1.0.dev0"
+version = "0.1.0a1"
 description = "On-brand design and motion from a chat thread. Built on Deep Agents."
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE.md", "licenses/*.txt"]
 requires-python = ">=3.11"
 keywords = ["design", "motion", "deep-agents", "langchain", "hyperframes", "paper", "slack"]
 classifiers = [
@@ -44,14 +44,16 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/langchain-ai/design-agent"
-Changelog = "https://github.com/langchain-ai/design-agent/blob/main/CHANGELOG.md"
-Security = "https://github.com/langchain-ai/design-agent/blob/main/SECURITY.md"
+Repository = "https://github.com/caiomioto2/design-agent"
+Changelog = "https://github.com/caiomioto2/design-agent/blob/main/CHANGELOG.md"
+Security = "https://github.com/caiomioto2/design-agent/blob/main/SECURITY.md"
 
 [project.scripts]
 design-agent = "design_agent.cli:main"
 
 [project.optional-dependencies]
+# Official TUI pinned to the version compatible with this agent's Deep Agents harness.
+terminal = ["deepagents-code==0.1.87; python_version >= '3.12'"]
 # Self-hosted path: Postgres persistence and the production ASGI server.
 self-host = [
     "langgraph-checkpoint-postgres>=3.2,<4",

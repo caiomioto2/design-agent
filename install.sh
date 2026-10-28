@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Install Design Agent: uv if it is missing, a clone of the repository, and its dependencies.
 #
-#   curl -fsSL https://raw.githubusercontent.com/langchain-ai/design-agent/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/caiomioto2/design-agent/main/install.sh | bash
 #
 # It never asks for or writes a key. DESIGN_AGENT_DIR picks the folder (default ./design-agent);
 # DESIGN_AGENT_REPO picks what to clone (a fork, say).
 set -euo pipefail
 
-REPO="${DESIGN_AGENT_REPO:-https://github.com/langchain-ai/design-agent.git}"
+REPO="${DESIGN_AGENT_REPO:-https://github.com/caiomioto2/design-agent.git}"
 DIR="${DESIGN_AGENT_DIR:-design-agent}"
 
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
@@ -32,17 +32,18 @@ else
 fi
 
 say "Installing dependencies"
-(cd "$DIR" && uv sync)
+(cd "$DIR" && UV_PROJECT_ENVIRONMENT=.venv uv sync --extra terminal --python 3.13)
 
 cat <<EOF
 
-Installed in $DIR. To put it in your team's Slack with Managed Deep Agents:
+Installed in $DIR. To use your existing ChatGPT subscription:
 
+  npm install -g codex-multi-auth@2.23.0
+  codex-ma login
   cd $DIR
-  uv run design-agent config set LANGSMITH_API_KEY=lsv2_... ANTHROPIC_API_KEY=sk-ant-...
-  uv run design-agent sandbox publish   # once per workspace: the agent's computer
-  uv run mda deploy
+  .venv/bin/design-agent configure-chatgpt
+  .venv/bin/design-agent sandbox build
+  ./run.sh
 
-Or open $DIR in Claude Code, Codex or Cursor and say "Deploy it to our Slack."
-To try it locally first, with Docker and no keys: uv run design-agent sandbox build && uv run design-agent demo
+The subscription is paid and its limits apply. Paper and other services keep their own limits.
 EOF

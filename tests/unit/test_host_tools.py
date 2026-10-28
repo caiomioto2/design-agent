@@ -158,8 +158,10 @@ def test_alpha_report_measures_pixels_not_the_request_flag() -> None:
     assert _png_alpha_report(b"not a png") == (None, None)
 
 
+@pytest.mark.parametrize("endpoint", ["https://api.openai.com/v1", "http://127.0.0.1:1456/v1/"])
 async def test_generate_image_writes_b64_output_and_reports_alpha(
     monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
 ) -> None:
     payload = {"data": [{"b64_json": base64.b64encode(_png(2, 2, 0)).decode()}]}
     seen: dict[str, Any] = {}
@@ -175,7 +177,8 @@ async def test_generate_image_writes_b64_output_and_reports_alpha(
     tools = {
         t.name: t
         for t in build_media_tools(
-            Settings(_env_file=None, openai_api_key="sk-test"), lambda _rt: backend
+            Settings(_env_file=None, openai_api_key="sk-test", image_base_url=endpoint),
+            lambda _rt: backend,
         )
     }  # type: ignore[call-arg,arg-type,return-value]
     result = await tools["generate_image"].coroutine(
@@ -187,4 +190,4 @@ async def test_generate_image_writes_b64_output_and_reports_alpha(
     )  # type: ignore[misc]
     assert "wrote /workspace/projects/p/lamp.png" in result and "alpha verified" in result
     assert seen["body"]["model"] == "gpt-image-2.5-flare"
-    assert seen["url"].startswith("https://api.openai.com/")
+    assert seen["url"] == endpoint.rstrip("/") + "/images/generations"

@@ -128,6 +128,44 @@ def test_base_url_requires_a_named_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert build_chat_model(s, "lead").openai_api_base == "https://llm.example/v1"  # type: ignore[attr-defined]
 
 
+@pytest.mark.parametrize("role", ["lead", "helper", "look", "tool_selector", "learning"])
+def test_codex_request_contract_for_every_role(role: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    monkeypatch.setenv("LOCAL_PROXY_KEY", "local-test")
+    model = build_chat_model(
+        settings(
+            model="openai:gpt-6.1-sol",
+            model_base_url="http://127.0.0.1:1456/v1",
+            model_api_key_env="LOCAL_PROXY_KEY",
+            model_api_mode="codex",
+        ),
+        role,  # type: ignore[arg-type]
+    )
+    payload = model._get_request_payload(  # type: ignore[attr-defined]
+        [SystemMessage(content="Follow the brand"), HumanMessage(content="Reply OK")]
+    )
+    assert model.use_responses_api is True  # type: ignore[attr-defined]
+    assert payload["stream"] is True and payload["store"] is False
+    assert isinstance(payload["input"], list)
+    assert [item["role"] for item in payload["input"]] == ["developer", "user"]
+    assert "reasoning.encrypted_content" in payload["include"]
+    assert "max_output_tokens" not in payload and "max_completion_tokens" not in payload
+    assert (
+        resolve_model(
+            settings(model="openai:gpt-6.1-sol", model_base_url="http://127.0.0.1:1456/v1")
+        ).caps.disclosure
+        is ToolDisclosure.PORTABLE_SELECTOR
+    )
+
+
+def test_codex_mode_requires_its_endpoint() -> None:
+    with pytest.raises(ModelConfigurationError, match="MODEL_BASE_URL"):
+        build_chat_model(
+            settings(model="openai:gpt-6.1-sol", model_api_mode="codex", openai_api_key="test")
+        )
+
+
 @pytest.mark.parametrize(
     "model_id", sorted(k for k in CAPABILITY_REGISTRY if k.startswith(("anthropic:", "openai:")))
 )

@@ -40,6 +40,11 @@ words, no letters, no logos". Prompting craft, schemas for complex scenes and th
 
 ## Transparent cut-outs
 
+The operator can route this tool through a compatible host endpoint with
+`DESIGN_AGENT_IMAGE_BASE_URL`, `DESIGN_AGENT_IMAGE_MODEL` and `OPENAI_API_KEY`. A subscription proxy
+may meter image usage against the connected plan instead of API billing. Use the configured host
+tool and its receipts; never obtain or copy account credentials into the sandbox.
+
 For a subject that sits on something else (a layered design, a sticker, an object reused across
 grounds), generate a real cut-out rather than masking a square later:
 

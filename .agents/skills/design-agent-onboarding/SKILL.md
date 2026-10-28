@@ -34,3 +34,12 @@ by name. Do not deploy, connect accounts or publish anything until the person as
 8. **What next.** Teach it the deliverable the team asks for every week
    ([design-agent-customize](../design-agent-customize/SKILL.md)), and measure changes with
    [design-agent-evals](../design-agent-evals/SKILL.md).
+
+## This fork's ChatGPT terminal path
+
+For the operator's existing ChatGPT subscription, use the [fork setup](../../../docs/chatgpt.md):
+install `codex-multi-auth@2.23.0`, have the operator sign in, `uv sync --extra terminal --python 3.13`,
+then `design-agent configure-chatgpt`, build the sandbox and open `./run.sh`. Never copy credentials
+from another client or describe the paid subscription as free or unlimited. The `terminal` extra
+uses the official Deep Agents Code TUI. `/files` lists local deliveries; optional private download
+links require `design-agent files` and `DESIGN_AGENT_DELIVERY_BASE_URL`.

@@ -15,6 +15,19 @@ optional preset (`langsmith:anthropic/claude-opus-5-5` with `LANGSMITH_GATEWAY_A
 routes and keep every feature in the table below; other providers use its shared route. For an OpenAI-compatible endpoint, set `DESIGN_AGENT_MODEL_BASE_URL` and
 `DESIGN_AGENT_MODEL_API_KEY_ENV` (the name of the variable that holds its key).
 
+For a local Codex subscription proxy, set `DESIGN_AGENT_MODEL_API_MODE=codex` alongside the
+base URL and its local credential. This uses the Responses API with streaming, `store=false`,
+encrypted reasoning for stateless follow-ups, developer instructions, and no unsupported
+output-token limit. The proxy
+owns ChatGPT authentication and account rotation; account credentials stay outside this project.
+`responses` selects the standard Responses API without Codex-specific settings; `auto` keeps the
+registry default. Roles using the lead's model share its endpoint.
+
+Image generation has its own endpoint: set `DESIGN_AGENT_IMAGE_BASE_URL` to the proxy's `/v1`
+URL, `OPENAI_API_KEY` to its local credential, and `DESIGN_AGENT_IMAGE_MODEL` to a model it serves.
+The image endpoint defaults to `https://api.openai.com/v1` and is never inferred from the text
+endpoint. Verify both with real calls; text access alone does not prove image access.
+
 ## Roles
 
 | Role | Setting | Default | What it does |

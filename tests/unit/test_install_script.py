@@ -36,13 +36,21 @@ def test_the_script_parses() -> None:
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
-def test_it_clones_syncs_and_points_at_mda_deploy(tmp_path: Path) -> None:
+def test_it_clones_syncs_and_points_at_chatgpt_terminal(tmp_path: Path) -> None:
     result = _run(tmp_path)
     assert result.returncode == 0, result.stderr
     target = tmp_path / "design-agent"
     assert (target / "agent.py").is_file()
-    assert (tmp_path / "uv.log").read_text().split() == [str(target), "sync"]
-    assert "uv run mda deploy" in result.stdout
+    assert (tmp_path / "uv.log").read_text().split() == [
+        str(target),
+        "sync",
+        "--extra",
+        "terminal",
+        "--python",
+        "3.13",
+    ]
+    assert "design-agent configure-chatgpt" in result.stdout
+    assert "./run.sh" in result.stdout
     assert not (target / ".env").exists()
     again = _run(tmp_path)
     assert again.returncode == 0, again.stderr

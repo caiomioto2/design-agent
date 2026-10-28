@@ -24,7 +24,11 @@ leave it out and list it as a question for the person.
    is `"1"`, unknown keys are refused, and every font stack ends in a generic family.
 4. `logos/`: SVG where the brand provides it; every variant the guide allows (mark, lockup,
    reversed). Do not redraw or trace a logo; ask for files.
-5. `fonts.toml`: for each face, an open font in `fonts/` or a licensed file the person supplies in
+5. For a public font reference, the runtime's `fetch_asset` downloads GitHub blob/raw files. For a
+   repository or ZIP, set `extract_fonts=True` and a project-local destination folder. Read its
+   `font-download.json`, check the license and `fc-scan` family before using it; do not execute
+   repository scripts. See [downloads](../../../docs/downloads.md).
+   `fonts.toml`: for each face, an open font in `fonts/` or a licensed file the person supplies in
    `private-fonts/` (Git-ignored; it reaches the sandbox as deployment files or a mount). Never
    commit licensed fonts. `family` is the name inside the file (the sandbox resolves fonts by it),
    `weight` a CSS weight (`"400"`, or `"100 900"` for a variable face), `sha256` from

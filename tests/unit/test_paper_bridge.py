@@ -42,6 +42,7 @@ class FakeDesktop:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.team = "team_TEST"
         self.fail = False
+        self.quota = False
         self.server = FastMCP("paper")
         resources = [
             {"id": DRAFT, "type": "file", "createdAt": 1, "updatedAt": 2},
@@ -81,6 +82,8 @@ class FakeDesktop:
         @self.server.tool
         def list_resources(limit: int = 50) -> str:
             record(("list_resources", {"limit": limit}))
+            if self.quota:
+                raise RuntimeError("Weekly MCP limit reached. It resets in 2 days.")
             return json.dumps({"teamId": self.team, "resources": resources})
 
 
@@ -196,12 +199,22 @@ def test_tunnel_hostnames_are_bare_names() -> None:
 
 def test_the_bridge_offers_only_the_tools_the_policy_admits(client: TestClient) -> None:
     tools = {tool["name"] for tool in rpc(client, "tools/list", {}).json()["result"]["tools"]}
-    assert tools == {"get_guide", "write_html", "get_tokens", "list_resources"}
+    assert tools == {"get_guide", "write_html", "get_tokens", "list_resources", "place_image"}
     deletes = PaperPolicy(drafts_file_id=DRAFT, allow_deletes=True)
     with client_for(FakeDesktop(), policy=deletes) as opted_in:
         assert "delete_nodes" in {
             t["name"] for t in rpc(opted_in, "tools/list", {}).json()["result"]["tools"]
         }
+
+
+def test_paper_quota_is_not_reported_as_a_team_or_connection_error(desktop: FakeDesktop) -> None:
+    from design_agent.paper_bridge.app import PAPER_MCP_LIMIT
+
+    desktop.quota = True
+    with client_for(desktop, team="team_TEST") as client:
+        error, text = call(client, "write_html", {"fileId": DRAFT, "html": "x"})
+    assert error and text == PAPER_MCP_LIMIT
+    assert [name for name, _args in desktop.calls] == ["list_resources"]
 
 
 def test_paper_resources_and_prompts_are_not_offered(client: TestClient) -> None:

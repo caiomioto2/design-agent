@@ -64,6 +64,7 @@ DESKTOP_UNAVAILABLE = (
 )
 TEAM_DRIFT = "Paper Desktop is not in the team this bridge serves; switch teams in Paper Desktop, then try again."
 TEAM_UNREADABLE = "Paper Desktop did not say which team it is in, so this bridge refuses the call."
+PAPER_MCP_LIMIT = "Paper's weekly MCP limit has been reached. Wait for it to reset; reconnecting or changing the ChatGPT account will not restore Paper's quota."
 FOREIGN_FILE = "That Paper file is not in the team this bridge serves; pass a file from that team."
 NOT_OFFERED = "This bridge offers Paper's tools only."
 
@@ -171,7 +172,7 @@ def _json_object(result: Any) -> dict[str, Any] | None:
                 value = json.loads(block.text)
             except ValueError:
                 continue
-            if isinstance(value, dict):
+            if isinstance(value, dict) and isinstance(value.get("teamId"), str):
                 return value
     structured = getattr(result, "structured_content", None)
     return structured if isinstance(structured, dict) else None
@@ -211,6 +212,11 @@ class TeamScope:
             result = await client.call_tool(
                 "list_resources", {"limit": LISTING_LIMIT}, raise_on_error=False
             )
+        if any(
+            "weekly mcp limit reached" in getattr(block, "text", "").lower()
+            for block in getattr(result, "content", [])
+        ):
+            return PAPER_MCP_LIMIT
         listing = _json_object(result)
         if listing is None or not isinstance(listing.get("teamId"), str):
             return TEAM_UNREADABLE
@@ -350,13 +356,19 @@ def create_app(
     Raises `BridgeConfigError` instead of starting with a short token or a malformed team id.
     """
     check_token(token)
-    team = TeamScope(team_id, lambda: Client(upstream)) if team_id is not None else None
-    proxy = create_proxy(upstream, name="design-agent-paper-bridge")
+    from design_agent.paper_bridge.images import ImageAssets, WithImageAssets, add_image_tool
+
+    team = (
+        TeamScope(team_id, lambda: Client(upstream, mode="auto")) if team_id is not None else None
+    )
+    proxy = create_proxy(upstream, name="design-agent-paper-bridge", mode="auto")
+    assets = ImageAssets()
+    add_image_tool(proxy, upstream, assets)
     proxy.add_middleware(BridgePolicy(policy, team))
     app = proxy.http_app(
         path=MCP_PATH, stateless_http=True, json_response=True, host_origin_protection=False
     )
-    return BridgeGuard(app, token=token, hostnames=hostnames)
+    return WithImageAssets(BridgeGuard(app, token=token, hostnames=hostnames), assets)
 
 
 def upstream_for(choice: str, *, cli: Callable[[], str | None] | None = None) -> Any:

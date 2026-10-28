@@ -1,40 +1,44 @@
-<div align="center">
-  <p>
-    <a href="https://www.langchain.com/?utm_source=github&utm_medium=readme&utm_campaign=design-agent#gh-light-mode-only"><img src="https://github.com/langchain-ai/design-agent/raw/main/docs/assets/readme/logos/langchain-company-light.svg" alt="LangChain" width="152"></a><a href="https://www.langchain.com/?utm_source=github&utm_medium=readme&utm_campaign=design-agent#gh-dark-mode-only"><img src="https://github.com/langchain-ai/design-agent/raw/main/docs/assets/readme/logos/langchain-company-dark.svg" alt="LangChain" width="152"></a>
-  </p>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/langchain-ai/design-agent/raw/main/docs/assets/readme/header-dark.png">
-    <img src="https://github.com/langchain-ai/design-agent/raw/main/docs/assets/readme/header-light.png" alt="Content Studio: one design brain for your whole company" width="100%">
-  </picture>
-  <p>
-    <a href="LICENSE#gh-light-mode-only"><img src="https://shieldcn.dev/badge/license-Apache%202.0-006DDD.svg?variant=outline&logo=lu:Scale&mode=light" alt="License: Apache 2.0"></a><a href="LICENSE#gh-dark-mode-only"><img src="https://shieldcn.dev/badge/license-Apache%202.0-7FC8FF.svg?variant=outline&logo=lu:Scale&mode=dark" alt="License: Apache 2.0"></a>
-    <a href="https://www.python.org#gh-light-mode-only"><img src="https://shieldcn.dev/badge/python-3.11%2B-006DDD.svg?variant=outline&logo=python&mode=light" alt="Python 3.11+"></a><a href="https://www.python.org#gh-dark-mode-only"><img src="https://shieldcn.dev/badge/python-3.11%2B-7FC8FF.svg?variant=outline&logo=python&mode=dark" alt="Python 3.11+"></a>
-    <a href="https://github.com/langchain-ai/deepagents#gh-light-mode-only"><img src="https://shieldcn.dev/badge/built%20on-Deep%20Agents-006DDD.svg?variant=outline&logo=lu:Layers&mode=light" alt="Built on Deep Agents"></a><a href="https://github.com/langchain-ai/deepagents#gh-dark-mode-only"><img src="https://shieldcn.dev/badge/built%20on-Deep%20Agents-7FC8FF.svg?variant=outline&logo=lu:Layers&mode=dark" alt="Built on Deep Agents"></a>
-    <a href="https://docs.langchain.com/langsmith/python/managed-deep-agents-overview?utm_source=github&utm_medium=readme&utm_campaign=design-agent#gh-light-mode-only"><img src="https://shieldcn.dev/badge/deploy-Managed%20Deep%20Agents-006DDD.svg?variant=outline&logo=lu:Rocket&mode=light" alt="Deploy with Managed Deep Agents"></a><a href="https://docs.langchain.com/langsmith/python/managed-deep-agents-overview?utm_source=github&utm_medium=readme&utm_campaign=design-agent#gh-dark-mode-only"><img src="https://shieldcn.dev/badge/deploy-Managed%20Deep%20Agents-7FC8FF.svg?variant=outline&logo=lu:Rocket&mode=dark" alt="Deploy with Managed Deep Agents"></a>
-  </p>
-  <p>
-    <b><a href="#quickstart">Distribute Content Studio to your team →</a></b> ·
-    <a href="#try-it-locally">Try it locally, no keys needed</a> ·
-    <a href="https://www.langchain.com/blog/design-agent?utm_source=github&utm_medium=readme&utm_campaign=design-agent">How we built it</a> ·
-    <a href="docs/README.md">Docs</a>
-  </p>
-</div>
+# Agentik Design Agent
 
-**Content Studio is the design agent LangChain runs, now open source.** Add your brand and deploy it
-to your team's Slack with Managed Deep Agents. Anyone can ask it like they'd ask a designer, attach what they have, and
-get finished, on-brand files back, from a resized ad to a launch film.
+Fork independente de [LangChain Design Agent](https://github.com/langchain-ai/design-agent),
+sob Apache-2.0. Usa a TUI oficial do Deep Agents Code e o `mcodex` para texto e imagens com
+sua assinatura ChatGPT existente. A assinatura é paga e seus limites continuam valendo.
+Este caminho usa o endpoint de assinatura, sem uma chave da API OpenAI. Não promete uso ilimitado,
+acesso a modelos fora do seu plano ou geração de imagens disponível para toda conta.
 
-Since August it has shipped over 3,000 assets for us, posts with its work drew about 4.5M views on
-X, and three in four requests come from outside marketing. [How we built it](https://www.langchain.com/blog/design-agent?utm_source=github&utm_medium=readme&utm_campaign=design-agent) goes deeper
-into each part.
+## Começar com ChatGPT
 
-## See it work
+Requisitos: Node.js 22+, [uv](https://docs.astral.sh/uv/getting-started/installation/) e Docker.
+No Windows, use WSL para o agente; o Paper Desktop pode ficar no Windows.
 
-We asked Content Studio for its own launch film. It went full Rocky.
+```bash
+git clone https://github.com/caiomioto2/design-agent.git
+cd design-agent
+npm install -g codex-multi-auth@2.23.0
+codex-ma login
+UV_PROJECT_ENVIRONMENT=.venv uv sync --extra terminal --python 3.13
+.venv/bin/design-agent configure-chatgpt
+.venv/bin/design-agent sandbox build
+./run.sh
+```
 
-https://github.com/user-attachments/assets/ee5b98e0-7ec6-4b24-ada6-1f27087947a3
+Em um servidor sem navegador, use `codex-ma login --device-auth`.
+Depois da instalação, `./run.sh` retoma a última conversa; `./run.sh --new` começa outra.
+O proxy local inicia junto com a TUI quando necessário. O OAuth fica no `mcodex`, fora do sandbox.
 
-<p align="center"><sub>From a 1-bit chick to champion in 47 seconds.</sub></p>
+Na TUI, `/files` mostra os arquivos entregues e `/mcp` mostra as integrações. Entregas locais
+informam o caminho real. Para abrir imagens em outro computador, configure o
+[servidor de downloads privado](docs/chatgpt.md#arquivos-na-tui).
+
+Paper e Figma são opcionais e usam as próprias conexões e cotas. O suporte a importar imagens
+pelo bridge do Paper está em validação; uma resposta de inserção aceita não prova que a imagem
+apareceu. Veja [ChatGPT e TUI](docs/chatgpt.md) e [Paper](docs/partners/paper.md).
+
+## O projeto original
+
+O núcleo de design, sandbox, renderização, skills e caminhos MDA/Slack vêm do projeto original.
+A apresentação e os exemplos a seguir descrevem esse upstream. As alterações deste fork estão
+no [changelog](CHANGELOG.md), e a autoria original permanece em [NOTICE.md](NOTICE.md).
 
 ## How it works
 
@@ -140,7 +144,7 @@ workspace as it is. You need a LangSmith account (Managed Deep Agents is in publ
 LangSmith Cloud) and a model key:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/langchain-ai/design-agent/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/caiomioto2/design-agent/main/install.sh | bash
 cd design-agent
 uv run design-agent config set LANGSMITH_API_KEY=lsv2_… ANTHROPIC_API_KEY=sk-ant-…
 uv run design-agent sandbox publish   # once per workspace: the agent's computer

@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 0.1.0a1
+
+Independent fork preview. Uses an existing paid ChatGPT subscription through the locally installed
+mcodex proxy, subject to account limits and model availability.
+
+### Added
+
+- Official Deep Agents Code TUI, pinned to 0.1.87, with streaming, persistent threads, MCP status
+  and a `/files` view. Requires Python 3.12+; the installer selects 3.13.
+- `configure-chatgpt`, `proxy` and `chat` commands. Text uses Codex Responses; GPT Image uses the
+  same mcodex loopback endpoint. OAuth tokens stay with mcodex on the host.
+- Private file download links for terminal delivery, with per-file capabilities and no listing.
+- Public GitHub repository and blob downloads, including bounded font ZIP extraction with
+  license files, a source manifest and SHA-256 checksums. Binary font MIME responses are supported.
+- Experimental Paper bridge raster transfer from sandbox files. Live canvas verification remains
+  pending; callers must check a screenshot before claiming insertion succeeded.
+
+### Fixed
+
+- Local uploads now report their actual saved paths instead of implying a visible chat attachment.
+- Paper quota failures report the weekly MCP limit instead of an unrelated team error.
+- The Paper bridge negotiates its upstream protocol independently of its frontend client.
+- Sandbox test path replacement preserves host paths containing `/workspaces`.
+
+### Upstream changes inherited
+
 ### Added
 
 - Memory on Managed Deep Agents (`memory.py`): a team layer every caller shares and a personal

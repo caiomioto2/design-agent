@@ -223,7 +223,13 @@ def build_local_runtime(
     waker = InProcessWaker(run_turn, store=store)
     services = BackgroundServices(waker=waker, capture_target=waker.capture)
     profile = local_profile(
-        project_root, chosen, out, services, slack=slack, surface=surface, delivery=delivery
+        project_root,
+        chosen,
+        out,
+        services,
+        slack=slack,
+        surface=surface,
+        delivery=delivery or LocalOutputAdapter(out, base_url=settings.delivery_base_url),
     )
     components = build_agent_components(
         settings=settings,

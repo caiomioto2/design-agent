@@ -33,7 +33,6 @@ from design_agent.tools.files import (
     write_bytes,
 )
 
-OPENAI_BASE_URL = "https://api.openai.com/v1"
 ELEVENLABS = "https://api.elevenlabs.io/v1"
 GROQ_TRANSCRIPTIONS = "https://api.groq.com/openai/v1/audio/transcriptions"
 ELEVENLABS_CAP_MB = 25  # five minutes of 320 kbps mp3 is about 12 MB
@@ -48,6 +47,7 @@ class MediaKeys:
     elevenlabs: str | None
     groq: str | None
     image_model: str
+    image_base_url: str
 
     @classmethod
     def from_settings(cls, settings: Settings) -> MediaKeys:
@@ -59,6 +59,7 @@ class MediaKeys:
             elevenlabs=value(settings.elevenlabs_api_key),
             groq=value(settings.groq_api_key),
             image_model=settings.image_model,
+            image_base_url=settings.image_base_url.rstrip("/"),
         )
 
 
@@ -580,7 +581,7 @@ def build_media_tools(settings: Settings, backend_for: BackendFor) -> list[BaseT
             wants_alpha = str(body.get("background", "")).strip().lower() == "transparent"
             async with httpx.AsyncClient(timeout=240, follow_redirects=False) as client:
                 response = await client.post(
-                    f"{OPENAI_BASE_URL}/images/generations",
+                    f"{keys.image_base_url}/images/generations",
                     headers={"Authorization": f"Bearer {keys.openai}"},
                     json=body,
                 )

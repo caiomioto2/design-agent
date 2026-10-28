@@ -93,7 +93,7 @@ def build_chat_model(
     }
     if resolved.base_url is not None:
         kwargs["base_url"] = resolved.base_url
-        key = _named_key(settings.model_api_key_env, project_root)
+        key = endpoint_api_key(settings.model_api_key_env, project_root)
         if key is None:
             raise ModelConfigurationError(
                 "DESIGN_AGENT_MODEL_BASE_URL needs DESIGN_AGENT_MODEL_API_KEY_ENV naming the "
@@ -168,11 +168,24 @@ def _openai(settings: Settings, resolved: ResolvedModel, kwargs: dict[str, Any])
 
     if settings.openai_api_key is not None:
         kwargs.setdefault("api_key", settings.openai_api_key.get_secret_value())
-    kwargs.setdefault("use_responses_api", resolved.caps.responses_api)
+    codex = settings.model_api_mode == "codex"
+    if codex and resolved.base_url is None:
+        raise ModelConfigurationError("codex mode requires DESIGN_AGENT_MODEL_BASE_URL")
+    kwargs.setdefault(
+        "use_responses_api", settings.model_api_mode != "auto" or resolved.caps.responses_api
+    )
+    if codex:
+        kwargs.setdefault("streaming", True)
+        kwargs.setdefault("store", False)
+        kwargs.setdefault("include", ["reasoning.encrypted_content"])
     if resolved.effort is not None:
         kwargs.setdefault("reasoning", {"effort": resolved.effort})
-    if resolved.max_output_tokens is not None:
+    if resolved.max_output_tokens is not None and not codex:
         kwargs.setdefault("max_completion_tokens", resolved.max_output_tokens)
+    if codex:
+        from design_agent.models.codex import CodexChatOpenAI
+
+        return CodexChatOpenAI(model=resolved.spec.model, **kwargs)
     return ChatOpenAI(model=resolved.spec.model, **kwargs)
 
 
@@ -184,7 +197,7 @@ def _gateway_key(settings: Settings) -> str:
     return ""
 
 
-def _named_key(env_name: str | None, project_root: Path | None) -> str | None:
+def endpoint_api_key(env_name: str | None, project_root: Path | None) -> str | None:
     """The value of the variable `env_name` from the process or the project `.env`."""
     if not env_name:
         return None

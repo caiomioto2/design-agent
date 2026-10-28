@@ -7,6 +7,10 @@
 | `demo` | a scripted run through the real agent, sandbox and gates, no keys: a card in three sizes and a 4-second teaser |
 | `doctor [--json]` | checks Python, packages, every model role, keys, the brand, the sandbox, MDA declarations, MCP and Paper, without printing secrets |
 | `ask "<request>" [--thread ID] [--file PATH]… [--no-wait]` | one request with your model; stays open for background work; threads persist in `workspace/state/` |
+| `configure-chatgpt` | configure text and images through the operator's mcodex subscription proxy |
+| `proxy` | run the mcodex loopback proxy separately |
+| `chat [--thread ID] [--new]` | official Deep Agents Code TUI; requires the `terminal` extra and Python 3.12+ |
+| `files [--host HOST] [--port PORT]` | serve delivered files through private capability links |
 | `config show\|set KEY=VALUE…\|generate KEY…` | read and change `.env` without printing secrets |
 | `brand validate\|css\|show\|init` | check the active pack, regenerate `tokens.css`, show it, start one from the sample |
 | `fonts verify` | brand font files present with their checksums; open fonts listed in `fonts/LICENSES.md` |
@@ -21,3 +25,7 @@
 
 There is no web setup console in v0.1: `config`, `doctor` and the coding-agent
 [onboarding skill](../.agents/skills/design-agent-onboarding/SKILL.md) cover setup.
+
+Local `upload_files` delivery saves files under `workspace/out/<thread>/`. Its receipt names the
+actual host paths; a terminal has no chat attachment panel. A Paper-connected desktop bridge can
+also import a generated raster using `paper_place_image` ([Paper](partners/paper.md)).
