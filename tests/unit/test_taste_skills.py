@@ -22,6 +22,7 @@ from tests.unit.test_public_hygiene import scan
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = (
     "content-brief",
+    "content-engine",
     "brand-design",
     "design-wiki",
     "motion-direction",

@@ -89,6 +89,9 @@ class McpServer:
     """A stdio server's executable and arguments (`url` is empty)."""
     bearer: SecretStr | None = field(default=None, repr=False, compare=False)
     """Sent as `Authorization: Bearer …` locally and self-hosted; MDA uses `connection` instead."""
+    approval_required: bool = False
+    """Gate every call except the operator's explicit read_tools, including new provider tools."""
+    read_tools: tuple[str, ...] = ()
 
     def headers(self, env: Mapping[str, str]) -> dict[str, str] | None:
         """The headers from the host environment; None when one it names is unset."""
@@ -108,6 +111,14 @@ def declared_servers(project_root: Path) -> list[McpServer]:
         if not SERVER_NAME.fullmatch(name):
             raise McpConfigError(f"MCP server name {name!r}: use lowercase letters and digits only")
         transport = entry.get("transport", "http")
+        approval = entry.get("approval_required", False)
+        reads = entry.get("read_tools", [])
+        if (
+            not isinstance(approval, bool)
+            or not isinstance(reads, list)
+            or any(not isinstance(tool, str) or not tool.strip() for tool in reads)
+        ):
+            raise McpConfigError(f"MCP server {name}: invalid approval_required or read_tools")
         if transport not in ("http", "sse", "stdio"):
             raise McpConfigError(f"MCP server {name}: transport must be http, sse or stdio")
         url = str(entry.get("url") or "")
@@ -143,6 +154,8 @@ def declared_servers(project_root: Path) -> list[McpServer]:
                 always_shown=bool(entry.get("always_shown", False)),
                 connection=str(entry["connection"]) if entry.get("connection") else None,
                 owner=owner,
+                approval_required=approval,
+                read_tools=tuple(reads),
             )
         )
     return servers

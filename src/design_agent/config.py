@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     runtime: RuntimeName = "local"
     delivery_base_url: str | None = None
     """Optional reachable URL of `design-agent files`; terminal delivery includes download links."""
+    shared_thread_id: str | None = None
+    """Default thread when the shared runtime starts; each conversation remains separate."""
+    shared_runtime_url: str | None = None
+    shared_runtime_token: SecretStr | None = None
+    slack_owner_user_id: str | None = None
+    """Slack operator allowed to resume locally created conversations."""
     sandbox: SandboxChoice = "auto"
     sandbox_snapshot: str | None = None
     sandbox_image: str = DEFAULT_SANDBOX_IMAGE

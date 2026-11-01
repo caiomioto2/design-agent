@@ -56,3 +56,38 @@ independente do ChatGPT e não pode ser restaurado por rotação de contas do mc
 Comandos da TUI voltados ao servidor de programação, como trocar agentes ou autenticar provedores,
 ficam fora desta integração. Use `/help`, `/files`, `/mcp`, `/clear` e `/quit`; altere o modelo pela
 configuração do projeto e reinicie.
+
+## Conversas separadas no Slack e no terminal
+
+O serviço compartilhado atende Slack e TUI com as mesmas integrações. Cada conversa mantém seu
+histórico, tarefas e sandbox; mensagens de outros projetos não são reunidas automaticamente.
+`DESIGN_AGENT_SHARED_RUNTIME_URL` e `DESIGN_AGENT_SHARED_RUNTIME_TOKEN` conectam a TUI ao serviço.
+`DESIGN_AGENT_SHARED_THREAD_ID` escolhe somente a conversa inicial padrão. `DESIGN_AGENT_SLACK_OWNER_USER_ID`
+identifica o operador que pode retomar pelo Slack conversas criadas localmente.
+
+Na TUI:
+
+- `/threads`: liste conversas anteriores com títulos e IDs.
+- `/resume ID` ou `/resume trecho único do título`: retome a conversa escolhida.
+- `/projects`: liste projetos anteriores e a conversa à qual pertencem.
+- `/project NOME`: retome a conversa que possui os arquivos desse projeto.
+- `/new`: inicie uma conversa separada. `design-agent chat --new` faz o mesmo ao abrir.
+- `design-agent chat --thread ID`: abra diretamente uma conversa salva.
+
+No Slack, mencione o bot para iniciar a participação em um fio de canal. Depois, respostas nesse
+fio dispensam @. O bot ignora os demais fios até ser chamado, inclusive após reiniciar o serviço.
+Em mensagens diretas não é necessário mencionar. Para navegar, envie `threads`, `projetos`,
+`retomar ID` ou `projeto NOME`. Retomar vincula apenas aquele fio à conversa escolhida; os históricos
+permanecem separados. A TUI pode abrir esse mesmo ID e continuar de onde o Slack parou.
+
+O agente dispõe das ferramentas `list_conversations`, `resume_conversation`, `list_previous_projects`
+e `open_previous_project`: pedidos como "liste minhas conversas" e "retome a conversa da logo" podem
+usar essas ferramentas, sem comandos decorados. A troca acontece ao terminar o turno atual. As
+ferramentas de retomada não ficam disponíveis como navegação autônoma dos helpers em segundo plano.
+Os projetos são encontrados pelo registro local dos volumes de cada conversa, sem mover ou copiar
+seus arquivos para outra. O histórico de cada thread continua salvo em `workspace/state/`.
+
+Respostas e anexos vão ao fio que originou o pedido. Turnos concorrentes da mesma conversa esperam
+na mesma fila; conversas diferentes continuam isoladas. O serviço do Slack precisa estar ativo
+para usar a TUI conectada. O GBrain permanece uma fonte compartilhada de conhecimento com as
+permissões da conexão, sem substituir os históricos separados.

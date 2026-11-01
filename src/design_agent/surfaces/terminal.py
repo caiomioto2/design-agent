@@ -97,9 +97,83 @@ def make_app(
 
         CSS_PATH = str(files("deepagents_code").joinpath("app.tcss"))
 
+        async def on_mount(self) -> None:
+            await super().on_mount()
+            if settings.shared_runtime_url:
+                self.set_interval(3, self._refresh_shared_history)
+
+        async def _refresh_shared_history(self) -> None:
+            if self._agent_running or not self._agent:
+                return
+            try:
+                target = getattr(runtime.graph, "pending_thread", None)
+                if target:
+                    runtime.graph.pending_thread = None
+                    await self._switch_conversation(target)
+                    return
+                info = await cast(Any, self._agent).revision(self._lc_thread_id)
+                revision = info.get("revision")
+                if not revision or info.get("pending"):
+                    return
+                if revision != getattr(self, "_shared_revision", None):
+                    await self._load_thread_history(resolve_pending_goal=False)
+                    self._shared_revision = revision
+            except Exception as error:  # noqa: BLE001 - connection failures must not close the UI
+                logging.getLogger(__name__).warning(
+                    "Shared history refresh: %s", type(error).__name__
+                )
+
+        async def _switch_conversation(self, target: str) -> None:
+            if self._agent_running:
+                await self._mount_message(
+                    AssistantMessage("Aguarde este turno terminar antes de trocar de conversa.")
+                )
+                return
+            await self._resume_thread(target)
+            save_session(session, self._lc_thread_id or thread)
+            self._shared_revision = None
+
         async def _handle_command(self, command: str) -> None:
             cmd = command.lower().strip()
-            if cmd == "/files":
+            parts = command.strip().split(maxsplit=1)
+            action = parts[0].lower() if parts else ""
+            if settings.shared_runtime_url and action in {
+                "/threads",
+                "/projects",
+                "/resume",
+                "/project",
+                "/new",
+                "/clear",
+            }:
+                graph = cast(Any, self._agent)
+                try:
+                    if action in {"/threads", "/projects"}:
+                        rows = await graph.conversations(projects=action == "/projects")
+                        lines = [
+                            f"- {row.get('project') or row.get('title')} · `{row.get('thread_id') or row.get('id')}`"
+                            for row in rows
+                        ]
+                        await self._mount_message(
+                            AssistantMessage(
+                                "\n".join(lines)
+                                or "Nenhuma conversa ou projeto anterior encontrado."
+                            )
+                        )
+                    elif action in {"/new", "/clear"}:
+                        await self._switch_conversation(await graph.new_thread())
+                    elif len(parts) == 2:
+                        await self._switch_conversation(
+                            await graph.resolve(parts[1], project=action == "/project")
+                        )
+                    else:
+                        await self._mount_message(
+                            AssistantMessage(
+                                "Use /resume ID ou /project NOME. /threads e /projects listam as opções."
+                            )
+                        )
+                except (ValueError, RuntimeError) as error:
+                    await self._mount_message(AssistantMessage(str(error)))
+            elif cmd == "/files":
                 from design_agent.surfaces.files import download_url
                 from design_agent.tools.delivery import LocalOutputAdapter
 
@@ -126,8 +200,10 @@ def make_app(
                 await self._mount_message(
                     AssistantMessage(
                         f"Design Agent · {settings.model}\n\n"
-                        "/files opens delivered files; /mcp shows integrations; /clear starts a new thread; /quit exits.\n\n"
-                        "Continue a saved thread with `design-agent chat --thread ID`. Change the model in `.env` and restart."
+                        "/threads lista conversas; /resume ID retoma uma conversa; /projects lista projetos; "
+                        "/project NOME abre seu projeto; /new começa outra conversa.\n\n"
+                        "/files mostra entregas; /mcp mostra integrações; /quit sai. "
+                        "Você também pode pedir ao agente para listar ou retomar conversas em linguagem natural."
                     )
                 )
             elif cmd in {"/mcp", "/clear", "/quit", "/q"}:

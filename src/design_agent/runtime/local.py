@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
+from langgraph.types import Command
 
 from design_agent.assembly import AgentComponents, build_agent_components
 from design_agent.config import Settings
@@ -34,6 +35,10 @@ Replies = Callable[[str, str], None]
 GRAPH_NAME = "design-agent"
 #: deepagents' own ceiling, as on MDA; `StepBudgetMiddleware` wraps a turn up just before it.
 DEFAULT_RECURSION_LIMIT = 9_999
+
+
+class ApprovalPending(ValueError):
+    """The caller must decide the pending actions before sending another message."""
 
 
 def local_profile(
@@ -91,6 +96,7 @@ class LocalRuntime:
     waker: InProcessWaker
     services: BackgroundServices
     replies: Replies
+    conversations: Any = None
     _locks: dict[str, asyncio.Lock] = field(default_factory=dict)
 
     def _config(self, thread_id: str, extra: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -114,12 +120,50 @@ class LocalRuntime:
         self, thread_id: str, message: str, configurable: Mapping[str, Any] | None = None
     ) -> list[BaseMessage]:
         config = self._config(thread_id, configurable)
+        if self.conversations is not None and configurable and configurable.get("slack_event"):
+            self.conversations.surfaces[thread_id] = "slack"
+        if await self.pending_approvals(thread_id):
+            raise ApprovalPending("Review the pending tool calls before sending another message")
         before = await self._message_count(config)
         result = await self.graph.ainvoke(
             {"messages": [HumanMessage(content=message)]}, config=config
         )
         messages: list[BaseMessage] = list(result.get("messages", []))
         return messages[before:]
+
+    async def pending_approvals(self, thread_id: str) -> list[dict[str, Any]]:
+        state = await self.graph.aget_state(self._config(thread_id))
+        return [
+            {"id": item.id, "value": item.value} for task in state.tasks for item in task.interrupts
+        ]
+
+    async def review(
+        self,
+        thread_id: str,
+        *,
+        interrupt_id: str,
+        decisions: list[dict[str, str]],
+        before_resume: Callable[[list[dict[str, Any]]], Awaitable[None]] | None = None,
+        configurable: Mapping[str, Any] | None = None,
+    ) -> list[BaseMessage]:
+        """Resume only the exact pending interrupt, under the same per-thread lock as a turn."""
+        async with self._lock(thread_id):
+            pending = await self.pending_approvals(thread_id)
+            if len(pending) != 1 or pending[0]["id"] != interrupt_id:
+                raise ValueError("Approval is stale or does not match this thread")
+            actions = pending[0]["value"].get("action_requests", [])
+            if len(decisions) != len(actions) or any(
+                decision.get("type") not in {"approve", "reject"} for decision in decisions
+            ):
+                raise ValueError("Provide one approve or reject decision for each pending action")
+            if before_resume is not None:
+                await before_resume(actions)
+            config = self._config(thread_id, configurable)
+            before = await self._message_count(config)
+            result = await self.graph.ainvoke(
+                Command(resume={interrupt_id: {"decisions": decisions}}), config=config
+            )
+            return list(result.get("messages", []))[before:]
 
     async def wake_turn(self, thread_id: str, message: str, started: asyncio.Event) -> None:
         """A turn the waker started: after the person's own turn on the thread, never during it."""
@@ -168,6 +212,10 @@ class LocalRuntime:
 
     async def stream(self, message: str, *, thread_id: str) -> AsyncIterator[dict[str, Any]]:
         async with self._lock(thread_id):
+            if await self.pending_approvals(thread_id):
+                raise ApprovalPending(
+                    "Review the pending tool calls before sending another message"
+                )
             async for chunk in self.graph.astream(
                 {"messages": [HumanMessage(content=message)]},
                 config=self._config(thread_id),

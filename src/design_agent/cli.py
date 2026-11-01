@@ -100,7 +100,12 @@ def terminal_chat(thread: str | None, new: bool) -> None:
     load_dotenv(root / ".env", override=True)
     settings = Settings()
     with ensure_proxy(root, settings):
-        asyncio.run(run(root, settings, thread=thread, new=new))
+        if settings.shared_runtime_url:
+            from design_agent.surfaces.shared import run_terminal
+
+            asyncio.run(run_terminal(root, settings, thread=thread, new=new))
+        else:
+            asyncio.run(run(root, settings, thread=thread, new=new))
 
 
 @main.command()
@@ -184,6 +189,20 @@ async def _ask(
                             for call in message.tool_calls:
                                 click.echo(f"  · {call['name']}", err=True)
             click.echo(final_text(added))
+            while pending := await runtime.pending_approvals(thread):
+                if not sys.stdin.isatty():
+                    click.echo("External tool calls are pending human approval.", err=True)
+                    return 2
+                approval = pending[0]
+                decisions = []
+                for action in approval["value"]["action_requests"]:
+                    click.echo(json.dumps(action, ensure_ascii=False, indent=2), err=True)
+                    accepted = click.confirm("Execute this exact external action?", default=False)
+                    decisions.append({"type": "approve" if accepted else "reject"})
+                reviewed = await runtime.review(
+                    thread, interrupt_id=approval["id"], decisions=decisions
+                )
+                click.echo(final_text(reviewed))
             if wait and runtime.busy():
                 click.echo(
                     "\nBackground work is running; waiting for it (Ctrl-C stops it, its files stay).",
