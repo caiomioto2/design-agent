@@ -15,6 +15,7 @@ which one fits.
 | [Customization](customization.md) | brand packs, instructions, runtime skills, learning, MCP servers |
 | [Integrations](integrations.md) | Notion, Linear, GitHub, Figma and other MCP servers, per person or shared |
 | [Download reference files](downloads.md) | public assets, GitHub files and font repository extraction |
+| [Content engine](integrations.md#content-engine) | CMS resources, blog posts, Zernio publishing, comment automations and human approval |
 | [Paper](partners/paper.md) | the shared canvas: local, bridged and off |
 | [HyperFrames](partners/hyperframes.md) | the video engine and its vendored skills |
 

@@ -35,6 +35,7 @@ from design_agent.middleware.housekeeping import HousekeepingMiddleware
 from design_agent.middleware.learning_tools import LearningToolsMiddleware
 from design_agent.middleware.look import LookMiddleware
 from design_agent.middleware.looks_tools import LooksToolsMiddleware, sandbox_exec_for
+from design_agent.middleware.mcp_approval import McpApprovalMiddleware
 from design_agent.middleware.meter import StaggerMiddleware
 from design_agent.middleware.paper_scope import PaperScopeMiddleware
 from design_agent.middleware.pipeline_tools import PipelineToolsMiddleware
@@ -174,6 +175,11 @@ def build_agent_components(
         )
         return [
             *scope,
+            *(
+                [McpApprovalMiddleware(mcp_servers, lead=lead_agent, tools=mcp_tools)]
+                if any(s.approval_required for s in mcp_servers)
+                else []
+            ),
             *model_guards(
                 role=role,
                 lead=lead_agent,

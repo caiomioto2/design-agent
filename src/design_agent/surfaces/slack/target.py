@@ -241,8 +241,12 @@ class SlackSurface:
         """The thread and client for a lead's hook, or None for a run that answers no Slack
         thread. Never raises."""
         try:
-            target = await self.resolver.target(runtime)
             thread = thread_of(runtime)
+            config = getattr(runtime, "config", None) or {}
+            if config.get("configurable", {}).get("interactive_surface") == "terminal":
+                self._threads.pop(thread, None)
+                return None
+            target = await self.resolver.target(runtime)
             if target is None:
                 known = self._threads.get(thread) if thread else None
                 if known is None:

@@ -73,6 +73,36 @@
 
 # --- Your own servers ---------------------------------------------------------------------------
 
+# Composio's connected-app tool discovery and execution. Keep the consumer key on the host.
+# [servers.composio]
+# url = "https://connect.composio.dev/mcp"
+# headers_env = { x-consumer-api-key = "COMPOSIO_CONSUMER_API_KEY" }
+# approval_required = true
+# read_tools = ["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_SEARCH_SKILLS", "COMPOSIO_USE_SKILL"]
+# timeout = 120
+
+# Content engine gateways. Use your own self-hosted gateway URLs and existing connections.
+# Full social discovery belongs on the gateway; do not restrict it to an automation pilot.
+# approval_required gates all tools except the exact operator-reviewed read_tools names.
+# Generic dispatchers stay gated even when their nested operation looks like a read.
+# [servers.content]
+# url = "https://actions.example.com/mcp/content-operations"
+# connection = "content-operations"
+# owner = "agent"
+# headers_env = { Authorization = "CONTENT_MCP_AUTHORIZATION" }
+# approval_required = true
+# read_tools = []  # add exact catalog/read names after inspecting your gateway
+# timeout = 120
+#
+# [servers.social]
+# url = "https://actions.example.com/mcp/social"
+# connection = "social"
+# owner = "agent"
+# headers_env = { Authorization = "SOCIAL_MCP_AUTHORIZATION" }
+# approval_required = true
+# read_tools = []  # generic dispatchers and every newly discovered tool require review
+# timeout = 120
+
 # A server of your own, read-only docs search with a shared token:
 # [servers.docs]
 # url = "https://docs.example.com/mcp"
