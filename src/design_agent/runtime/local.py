@@ -151,9 +151,12 @@ class LocalRuntime:
             pending = await self.pending_approvals(thread_id)
             if len(pending) != 1 or pending[0]["id"] != interrupt_id:
                 raise ValueError("Approval is stale or does not match this thread")
-            actions = pending[0]["value"].get("action_requests", [])
-            if len(decisions) != len(actions) or any(
-                decision.get("type") not in {"approve", "reject"} for decision in decisions
+            value = pending[0]["value"]
+            actions = value.get("action_requests", []) if isinstance(value, dict) else []
+            if (
+                not actions
+                or len(decisions) != len(actions)
+                or any(decision.get("type") not in {"approve", "reject"} for decision in decisions)
             ):
                 raise ValueError("Provide one approve or reject decision for each pending action")
             if before_resume is not None:

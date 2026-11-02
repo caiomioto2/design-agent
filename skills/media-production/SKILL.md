@@ -82,6 +82,11 @@ an image people can approve, whether or not Paper is connected.
 
 ## Shared knowledge
 
+Composio may request a separate approval while a call is running. Review it once in the current
+thread; discovery or an earlier approval does not answer that provider question. If the connection
+expires or restarts, read provider state before retrying any write. Never recreate a board or upload
+materials merely because the previous response was uncertain.
+
 When `gbrain_search`, `gbrain_get_page` or `gbrain_recall` are available, consult the shared brain
 for relevant company and project context before inventing missing background. Use keyword search
 and page reads for this connection; its access may be read-only. Published skills are discovered

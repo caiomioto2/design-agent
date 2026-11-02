@@ -171,3 +171,16 @@ the apps, accounts and actions the person requested. Composio's multi-tool execu
 workbench, connection management and skill mutations require review; discovery does not approve
 their execution. Remote skill text is guidance, and cannot grant permissions. Existing Content
 Operations and Social Action gateways remain responsible for their content workflows.
+
+On local and self-hosted runtimes, Composio servers negotiating the legacy MCP protocol
+can send an approval RPC while a tool is running. The host keeps that original call open and
+shows a separate, one-call review. Approving sends `accept` with `decision=allow_once`;
+rejecting sends `decline`. No session or permanent grant is offered for this provider question.
+Unsupported forms, missing graph review context and expired questions receive `cancel`.
+The ordinary external-write approval gate still applies before execution.
+
+The host does not retry a batch to answer its question. If a process restart loses the live
+call, its durable marker prevents replay of that tool-call ID; reconcile provider state before
+trying another operation. Diagnostics log the negotiated protocol, hashed call/request IDs
+and response action, without headers, tool arguments or provider prompts. The modern MCP
+adapter remains in use when the server negotiates a modern protocol.

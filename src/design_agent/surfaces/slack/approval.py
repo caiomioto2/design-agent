@@ -82,14 +82,20 @@ def blocks(pending: dict[str, Any]) -> list[dict[str, Any]]:
             "elements": [
                 {
                     "type": "plain_text",
-                    "text": "Sessão = esta conversa. Sempre = esta pessoa e operação em outras conversas. "
-                    "Use ‘revogar aprovacoes’ para remover permissões salvas.",
+                    "text": (
+                        "Esta aprovação MCP vale somente para esta chamada."
+                        if pending["value"].get("type") == "mcp_legacy_approval"
+                        else "Sessão = esta conversa. Sempre = esta pessoa e operação em outras conversas. "
+                        "Use ‘revogar aprovacoes’ para remover permissões salvas."
+                    ),
                 }
             ],
         },
     ]
     buttons = []
     for action, (label, _, scope) in BUTTONS.items():
+        if pending["value"].get("type") == "mcp_legacy_approval" and scope != "once":
+            continue
         button: dict[str, Any] = {
             "type": "button",
             "text": {"type": "plain_text", "text": label},
@@ -126,6 +132,11 @@ def preview(pending: dict[str, Any]) -> str:
             "A revisão é grande demais para este fio. Abra esta conversa no terminal para revisar."
         )
     identifier = pending["id"]
+    if pending["value"].get("type") == "mcp_legacy_approval":
+        return (
+            f"Revise esta chamada MCP:\n{details}\n"
+            f"Responda `aprovar {identifier}` uma vez ou `rejeitar {identifier}`."
+        )
     return (
         "Revise o destino, o conteúdo e o efeito destas ações antes de executar:\n"
         f"```{details}```\n"
@@ -172,6 +183,8 @@ async def review_reply(
     if len(pending) != 1 or not isinstance(pending[0]["value"], dict):
         return "Esta conversa precisa de revisão no terminal antes de continuar."
     item = pending[0]
+    if item["value"].get("type") == "mcp_legacy_approval" and scope != "once":
+        return "Esta aprovação MCP vale somente para esta chamada. Use ‘Aprovar uma vez’."
     actions = item["value"].get("action_requests")
     if not actions:
         return "Esta conversa precisa de revisão no terminal antes de continuar."

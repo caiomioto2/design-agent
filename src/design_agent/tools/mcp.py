@@ -221,8 +221,13 @@ async def _load_one(server: McpServer, env: Mapping[str, str]) -> list[BaseTool]
     from langchain.mcp import MCPAdapter
 
     transport = _transport(server, env)
-    async with MCPAdapter(transport) as adapter:
-        tools = await adapter.list_tools()
+    if server.name == "composio":
+        from design_agent.tools.composio import load_tools
+
+        tools = await load_tools(transport, server.name, server.timeout)
+    else:
+        async with MCPAdapter(transport) as adapter:
+            tools = await adapter.list_tools()
     if server.include_tools is not None:
         tools = [t for t in tools if t.name in server.include_tools]
     return [t.model_copy(update={"name": f"{server.name}_{t.name}"}) for t in tools]
