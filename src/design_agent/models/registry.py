@@ -147,6 +147,8 @@ UNKNOWN_MODEL = ModelCapabilities(
 def capabilities_for(spec: ModelSpec, *, base_url: str | None = None) -> ModelCapabilities:
     """Exact lookup. A custom endpoint, or a gateway route that is not the provider's own API,
     never inherits provider-native features."""
+    if str(spec) == "openai:gpt-6.1-terra" and base_url is not None:
+        return _portable(_openai("medium"), "Terra via compatible endpoint: portable selector.")
     if spec.via_gateway:
         upstream = CAPABILITY_REGISTRY.get(str(spec.upstream), UNKNOWN_MODEL)
         if spec.upstream.provider in GATEWAY_NATIVE_PROVIDERS:

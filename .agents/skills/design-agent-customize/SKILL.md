@@ -64,3 +64,13 @@ sibling skill of ours, or send the change upstream.
 `uv run design-agent config set DESIGN_AGENT_MODEL=provider:model`, then
 `uv run design-agent test model`. `DESIGN_AGENT_JOB_BUDGET_USD` makes the agent ask before passing
 a budget; `DESIGN_AGENT_HELPER_EFFORT_CAP` caps helpers' effort. More: [Customization](../../../docs/customization.md).
+
+## Compartilhar o serviço com conversas separadas
+
+O [serviço compartilhado](../../../docs/chatgpt.md#conversas-separadas-no-slack-e-no-terminal)
+serve Slack e TUI sem juntar históricos. `DESIGN_AGENT_SHARED_THREAD_ID` é apenas a conversa inicial;
+a TUI escolhe outras com `/threads`, `/resume`, `/projects`, `/project` e `/new`. No Slack, a primeira
+menção ativa um fio; respostas seguintes dispensam @, e os demais fios continuam fora do escopo.
+`retomar ID` vincula esse fio a uma conversa existente. Configure o operador com
+`DESIGN_AGENT_SLACK_OWNER_USER_ID` para permitir acesso às suas conversas locais. Preserve os
+históricos e volumes antigos, teste a separação, a retomada e o destino das respostas antes de reiniciar.

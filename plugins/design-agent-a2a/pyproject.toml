@@ -1,0 +1,28 @@
+[project]
+name = "design-agent-a2a"
+version = "0.1.0"
+description = "Local Codex bridge to an existing Design Agent runtime over A2A 1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "a2a-sdk[http-server]==1.3.0",
+  "fastmcp==3.4.11",
+  "httpx>=0.28,<1",
+  "python-dotenv>=1,<2",
+]
+
+[dependency-groups]
+dev = ["pytest>=9,<10", "pytest-asyncio>=1,<2"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["E402"]

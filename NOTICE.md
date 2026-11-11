@@ -29,3 +29,11 @@ that code's MIT notice is preserved in [licenses/managed-deepagents-sdk-MIT.txt]
 
 The sample brand in [examples/brands/example-studio/](examples/brands/example-studio/) is original
 work released under CC0-1.0.
+
+## Independent fork changes
+
+This fork adds ChatGPT subscription transport through an operator-installed mcodex proxy,
+an optional terminal adapter, local download receipts, and Paper bridge fixes. It is not an
+OpenAI or LangChain product or endorsement. Original copyright and Apache-2.0 terms remain.
+Deep Agents Code is an optional, unmodified MIT dependency; codex-multi-auth is a separately
+installed MIT dependency. Neither dependency's source is vendored by this fork.

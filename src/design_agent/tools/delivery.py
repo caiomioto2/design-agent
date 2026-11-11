@@ -53,23 +53,35 @@ class DeliveredFile:
 class DeliveryAdapter(Protocol):
     """Sends files to the person; raises on failure."""
 
-    def deliver(self, thread_id: str, files: Sequence[DeliveredFile]) -> None: ...
+    def deliver(self, thread_id: str, files: Sequence[DeliveredFile]) -> str | None: ...
 
 
 class LocalOutputAdapter:
     """CLI and demo delivery: copy into `<out>/<thread>/`, never overwriting a different file."""
 
-    def __init__(self, out_dir: Path) -> None:
+    def __init__(self, out_dir: Path, *, base_url: str | None = None) -> None:
         self.out_dir = out_dir
+        self.base_url = base_url
 
     def folder(self, thread_id: str) -> Path:
         return self.out_dir / SAFE_NAME.sub("-", thread_id)[:80]
 
-    def deliver(self, thread_id: str, files: Sequence[DeliveredFile]) -> None:
+    def deliver(self, thread_id: str, files: Sequence[DeliveredFile]) -> str:
         folder = self.folder(thread_id)
         folder.mkdir(parents=True, exist_ok=True)
         for item in files:
             (folder / item.name).write_bytes(item.content)
+        paths = "\n".join(str((folder / item.name).resolve()) for item in files)
+        receipt = f"Saved locally (this terminal has no attachment panel):\n{paths}"
+        if self.base_url:
+            from design_agent.surfaces.files import download_url
+
+            links = "\n".join(
+                f"[{item.name}]({download_url(self.out_dir, self.base_url, folder.name, item.name)})"
+                for item in files
+            )
+            receipt += f"\nOpen or download these files:\n{links}"
+        return receipt
 
 
 #: LangSmith refuses larger attachments, and skips a name with a period in it.
@@ -150,10 +162,10 @@ def build_upload_tool(
             names.add(name)
             files.append(DeliveredFile(name=name, content=result.content))
         try:
-            adapter.deliver(thread_id_for(runtime), files)
+            receipt = adapter.deliver(thread_id_for(runtime), files)
         except Exception:  # noqa: BLE001 - adapter errors can carry tokens or URLs
             return NOT_CONFIRMED
-        return UPLOADED
+        return f"{UPLOADED}\n{receipt}" if receipt else UPLOADED
 
     return StructuredTool.from_function(
         func=upload_files,
@@ -298,11 +310,13 @@ class DeliveryLedgerMiddleware(AgentMiddleware[Any, Any, Any]):
             return self._skip_message(request, already)
         call = _with_paths(request.tool_call, fresh)
         result = handler(request.override(tool_call=call))
-        if isinstance(result, ToolMessage) and str(result.content).strip() == UPLOADED:
+        if isinstance(result, ToolMessage) and str(result.content).split("\n", 1)[0] == UPLOADED:
             self._record(backend, self._thread_id_for(request.runtime), fresh, hashes)
             if already:
-                result.content = f"{UPLOADED} Skipped, already delivered: " + ", ".join(
-                    posixpath.basename(p) for p in already
+                result.content = (
+                    str(result.content)
+                    + " Skipped, already delivered: "
+                    + ", ".join(posixpath.basename(p) for p in already)
                 )
         return result
 
@@ -323,13 +337,15 @@ class DeliveryLedgerMiddleware(AgentMiddleware[Any, Any, Any]):
             return self._skip_message(request, already)
         call = _with_paths(request.tool_call, fresh)
         result = await handler(request.override(tool_call=call))
-        if isinstance(result, ToolMessage) and str(result.content).strip() == UPLOADED:
+        if isinstance(result, ToolMessage) and str(result.content).split("\n", 1)[0] == UPLOADED:
             await asyncio.to_thread(
                 self._record, backend, self._thread_id_for(request.runtime), fresh, hashes
             )
             if already:
-                result.content = f"{UPLOADED} Skipped, already delivered: " + ", ".join(
-                    posixpath.basename(p) for p in already
+                result.content = (
+                    str(result.content)
+                    + " Skipped, already delivered: "
+                    + ", ".join(posixpath.basename(p) for p in already)
                 )
         return result
 

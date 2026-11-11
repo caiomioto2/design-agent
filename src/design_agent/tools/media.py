@@ -35,7 +35,6 @@ from design_agent.tools.files import (
     write_bytes,
 )
 
-OPENAI_BASE_URL = "https://api.openai.com/v1"
 ELEVENLABS = "https://api.elevenlabs.io/v1"
 GROQ_TRANSCRIPTIONS = "https://api.groq.com/openai/v1/audio/transcriptions"
 ELEVENLABS_CAP_MB = 25  # five minutes of 320 kbps mp3 is about 12 MB
@@ -104,7 +103,9 @@ def image_route(settings: Settings) -> ImageRoute | None:
             f"{GATEWAY_GOOGLE}/models", gateway, "the LangSmith Gateway", provider="google"
         )
     if openai:
-        return ImageRoute(f"{OPENAI_BASE_URL}/images/generations", openai, "OpenAI")
+        return ImageRoute(
+            f"{settings.image_base_url.rstrip('/')}/images/generations", openai, "OpenAI"
+        )
     if google:
         return ImageRoute(f"{GOOGLE_API}/models", google, "Google", provider="google")
     if gateway:

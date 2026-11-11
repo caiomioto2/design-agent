@@ -542,3 +542,55 @@ async def test_a_bridged_export_never_reads_this_machines_files(
         exports_folder=downloads,
     )
     assert "returned no file bytes" in replied(result).text and written.exists()
+
+
+async def test_generated_image_is_read_from_sandbox_before_paper_call(
+    sandbox: FolderSandbox,
+) -> None:
+    received: list[dict[str, Any]] = []
+
+    async def place(**args: Any) -> str:
+        received.append(args)
+        return "inserted"
+
+    image_tool = StructuredTool(
+        name="paper_place_image",
+        description="Insert a raster.",
+        coroutine=place,
+        args_schema={
+            "type": "object",
+            "properties": {
+                "image_base64": {"type": "string"},
+                "fileId": {"type": "string"},
+                "targetNodeId": {"type": "string"},
+                "width": {"type": "integer"},
+                "height": {"type": "integer"},
+            },
+            "required": ["image_base64", "fileId", "targetNodeId", "width", "height"],
+        },
+    )
+    path = "/workspace/projects/teaser/plate.png"
+    sandbox.upload_files([(path, PNG)])
+    args = {"path": path, "targetNodeId": "board", "width": 1, "height": 1}
+    result = await turn([image_tool], "paper_place_image", args, backend=sandbox)
+    assert replied(result).content == "inserted"
+    assert received == [
+        {
+            "image_base64": base64.b64encode(PNG).decode(),
+            "fileId": DRAFT,
+            "targetNodeId": "board",
+            "width": 1,
+            "height": 1,
+        }
+    ]
+    received.clear()
+    result = await turn(
+        [image_tool], "paper_place_image", {**args, "path": "/etc/passwd"}, backend=sandbox
+    )
+    assert replied(result).status == "error"
+    assert not received
+    result = await turn(
+        [image_tool], "paper_place_image", {**args, "fileId": BRAND}, backend=sandbox
+    )
+    assert replied(result).status == "error"
+    assert not received

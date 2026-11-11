@@ -66,7 +66,10 @@ def test_upload_tool_copies_files_and_refuses_paths_outside_workspace(tmp_path: 
         thread_id_for=lambda _rt: "t-1",
     )
     func = tool.func  # type: ignore[attr-defined]
-    assert func(paths=["/workspace/projects/card/a.png"], runtime=Runtime()) == UPLOADED
+    receipt = func(paths=["/workspace/projects/card/a.png"], runtime=Runtime())
+    assert "Saved locally" in receipt
+    assert str(tmp_path / "t-1/a.png") in receipt
+    assert "no attachment panel" in receipt
     assert (tmp_path / "t-1/a.png").read_bytes() == b"png-bytes"
     assert "under /workspace" in func(paths=["/etc/passwd"], runtime=Runtime())
     assert "could not be read" in func(paths=["/workspace/missing.png"], runtime=Runtime())

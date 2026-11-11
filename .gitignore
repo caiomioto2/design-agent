@@ -34,3 +34,6 @@ node_modules/
 .coverage
 coverage.xml
 channels/slack-icon.png
+
+# Private Orca drops and runtime context
+.orca/

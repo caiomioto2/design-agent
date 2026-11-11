@@ -104,7 +104,23 @@ taste encoded as skills. The internal reference deployment taught every rule in 
   checks, opt-in live tests, a design eval set, a model matrix.
 - Documentation and launch packaging (§21).
 
-### 4.2 Planned for v0.2 (extension points designed now, code later)
+### 4.2 Optional content publishing
+
+The `content-engine` skill uses configured Content Operations and Social Action gateways for
+CMS resources, blog posts, Zernio posts and comment automations. The shared assembly enforces
+human review on servers with `approval_required`, except explicit operator-listed read tools
+and saved permissions explicitly granted by the verified Slack requester.
+New provider tools and generic dispatchers require review. Helpers cannot perform gated calls.
+Native MDA cards, the CLI and the owner-authenticated API can approve or reject exact actions.
+Self-hosted Slack offers approve once, approve for this conversation, always approve this
+operation for this person, and reject. Saved grants survive restarts, bind to the endpoint,
+tool schema and nested operation, and can be revoked with `revogar aprovacoes`. Other people,
+scheduled turns and helpers cannot consume the requester's grants. Duplicate clicks cannot
+repeat a completed review.
+Provider-side validation, publication state, persistence and delivery are verified separately.
+Campaign receipts support reconciliation; they do not promise exactly-once provider execution.
+
+### 4.3 Planned for v0.2 (extension points designed now, code later)
 
 - **Routines**: person-owned recurring jobs on MDA runtime schedules with generic sources (RSS/Atom,
   web page, Slack links) and the "a scheduled run never publishes" rule.
@@ -115,7 +131,7 @@ taste encoded as skills. The internal reference deployment taught every rule in 
 - **Hosted Paper**: when Paper offers a hosted or token-based MCP.
 - **Native MDA async subagents** replacing the custom helper runner once released (§7.4).
 
-### 4.3 Not included
+### 4.4 Not included
 
 - Any LangChain brand asset, person, channel, account, campaign, analytics workspace, internal agent
   or internal infrastructure identifier.
@@ -123,7 +139,7 @@ taste encoded as skills. The internal reference deployment taught every rule in 
   internal motion component library ported from a third-party site without a recorded license, or any
   asset with non-commercial terms.
 - The internal canvas motion engine (HyperFrames is the single video engine).
-- Social posting, the internal quote-post copilot, the launch ledger, managed-tool connectors, public
+- The internal quote-post copilot, the launch ledger, managed-tool connectors, public
   asset hosting.
 - An LLM "taste judge". Quality comes from deterministic gates, the agent looking at its own renders,
   and human review. (Every model judge tried internally failed or blocked legitimate asks.)
