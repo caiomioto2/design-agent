@@ -22,10 +22,13 @@ jobs:
       - name: Cut the release notes from CHANGELOG.md
         run: |
           python3 - <<'PY'
-          import re, pathlib
+          import os, re, pathlib
           text = pathlib.Path("CHANGELOG.md").read_text()
-          match = re.search(r"^## Unreleased\n(.*?)(?=^## |\Z)", text, re.S | re.M)
-          pathlib.Path("RELEASE_NOTES.md").write_text(match.group(1).strip() if match else "See CHANGELOG.md.")
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          match = re.search(r"^## " + re.escape(version) + r"\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+          if not match or not match.group(1).strip():
+              raise SystemExit(f"CHANGELOG.md has no notes for {version}")
+          pathlib.Path("RELEASE_NOTES.md").write_text(match.group(1).strip())
           PY
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:

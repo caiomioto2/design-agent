@@ -40,10 +40,13 @@ always gets an image people can approve.
   outranks anything on the canvas. Copy someone gave you is used exactly.
 - One visual group per `paper_write_html` call; repeated rows are `paper_duplicate_nodes` plus
   `paper_set_text_content`.
-- Images by reference are refused (`paper-asset:`, `file:`), and AI generation (`paper-gen:`) works
-  only where the operator turned it on. Compose from type, shapes and SVG; where the board needs a
-  photo or a generated plate, put a labelled placeholder frame on the canvas and the real image in
-  the sandbox board.
+- To insert a generated image, use `paper_place_image` when available: pass its sandbox `path`,
+  `fileId`, the artboard or frame's `targetNodeId`, `width` and `height` in pixels. The host reads
+  the raster and transfers it through the desktop bridge. PNG, JPEG and WebP up to 15 MiB are
+  supported. Verify the artboard with `paper_get_screenshot` before saying it is saved.
+- Raw local references (`paper-asset:`, `file:`) remain refused. AI generation (`paper-gen:`)
+  works only where the operator turned it on. If `paper_place_image` is unavailable, explain the
+  limitation once and deliver the real image from the sandbox with its actual delivery location.
 - After each meaningful change, `paper_get_screenshot` the artboard and fix what is off; when
   content clips, set the artboard's height to `fit-content` rather than guessing.
 - Done: `paper_finish_working_on_nodes` with the artboard ids you touched.

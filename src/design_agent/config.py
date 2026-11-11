@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     learning_model: str | None = None
     """A cheaper model for the post-job review (`learn_from_job`); unset uses a low-effort helper."""
     model_base_url: str | None = None
+    model_api_mode: Literal["auto", "responses", "codex"] = "auto"
+    """OpenAI wire format; codex uses stateless streaming through a local subscription proxy."""
     model_api_key_env: str | None = None
     """Name of the env var holding the key for a compatible endpoint at `model_base_url`."""
     helper_effort_cap: str | None = None
@@ -105,6 +107,14 @@ class Settings(BaseSettings):
 
     # Runtime and the designer's computer
     runtime: RuntimeName = "local"
+    delivery_base_url: str | None = None
+    """Optional reachable URL of `design-agent files`; terminal delivery includes download links."""
+    shared_thread_id: str | None = None
+    """Default thread when the shared runtime starts; each conversation remains separate."""
+    shared_runtime_url: str | None = None
+    shared_runtime_token: SecretStr | None = None
+    slack_owner_user_id: str | None = None
+    """Slack operator allowed to resume locally created conversations."""
     sandbox: SandboxChoice = "auto"
     sandbox_snapshot: str | None = None
     sandbox_image: str = DEFAULT_SANDBOX_IMAGE
@@ -124,6 +134,7 @@ class Settings(BaseSettings):
 
     # Media providers (host tools; keys never enter the sandbox)
     image_model: str = "gpt-image-2.5-flare"
+    image_base_url: str = "https://api.openai.com/v1"
     elevenlabs_api_key: SecretStr | None = Field(
         default=None, validation_alias=_alias("ELEVENLABS_API_KEY")
     )

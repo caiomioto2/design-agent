@@ -86,6 +86,7 @@ EDIT_TOOLS = frozenset(
         "duplicate_nodes",
         "move_nodes",
         "finish_working_on_nodes",
+        "place_image",
     }
 )
 FILE_TOOLS = frozenset({"list_resources", "open_file", "create_file"})

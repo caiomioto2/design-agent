@@ -5,7 +5,7 @@ its schedules in your LangSmith workspace, with tracing built in. This repositor
 so `mda deploy` deploys it as it is:
 
 ```bash
-git clone https://github.com/langchain-ai/design-agent.git && cd design-agent
+git clone https://github.com/caiomioto2/design-agent.git && cd design-agent
 uv run design-agent config set LANGSMITH_API_KEY ANTHROPIC_API_KEY   # type each key; it stays hidden
 uv run design-agent sandbox publish
 uv run mda deploy

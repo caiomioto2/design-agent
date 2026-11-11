@@ -7,6 +7,7 @@ It stands in for the Docker runner in offline tests; it is not isolation.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from deepagents.backends import LocalShellBackend
@@ -22,7 +23,11 @@ class FolderSandbox(LocalShellBackend):
         self.root = root
 
     def execute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
-        rewritten = command.replace("/workspace", str(self.root / "workspace"))
+        rewritten = re.sub(
+            r"(?<![\w/.-])/workspace(?![\w.-])",
+            lambda _match: str(self.root / "workspace"),
+            command,
+        )
         return super().execute(rewritten, timeout=timeout)
 
 

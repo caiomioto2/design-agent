@@ -113,6 +113,21 @@ def _with_project(tool: BaseTool) -> BaseTool:
     return tool.model_copy(update={"args_schema": extended})
 
 
+def _with_image_path(tool: BaseTool) -> BaseTool:
+    schema = tool.args_schema
+    if not isinstance(schema, dict):
+        return tool
+    props = {k: v for k, v in (schema.get("properties") or {}).items() if k != "image_base64"}
+    props["path"] = {
+        "type": "string",
+        "description": "PNG, JPEG or WebP file under /workspace; the host transfers its bytes to Paper.",
+    }
+    required = [k for k in schema.get("required", []) if k != "image_base64"]
+    return tool.model_copy(
+        update={"args_schema": {**schema, "properties": props, "required": [*required, "path"]}}
+    )
+
+
 def _with_note(message: SystemMessage | None, note: str) -> SystemMessage:
     if message is None:
         return SystemMessage(content=note)
@@ -207,6 +222,8 @@ class PaperScopeMiddleware(AgentMiddleware[Any, Any, Any]):
             shown = (
                 _with_project(tool) if bare in EXPORT_TOOLS and isinstance(tool, BaseTool) else tool
             )
+            if bare == "place_image" and isinstance(shown, BaseTool):
+                shown = _with_image_path(shown)
             changed |= shown is not tool
             tools.append(shown)
         if not present:
@@ -252,6 +269,23 @@ class PaperScopeMiddleware(AgentMiddleware[Any, Any, Any]):
             return _refused(call, decision.refusal)
         if tool in EXPORT_TOOLS:
             return await self._export(request, handler, decision, project)
+        if tool == "place_image":
+            forwarded = dict(decision.args)
+            path = forwarded.pop("path", None)
+            if not isinstance(path, str):
+                return _refused(call, "Pass path to a PNG, JPEG or WebP file under /workspace.")
+            backend = self._backend_for(request.runtime)
+            if backend is None:
+                return _refused(call, NO_SANDBOX)
+            try:
+                data = await read_bytes(backend, path, cap_mb=15)
+            except WorkspaceError as error:
+                return _refused(call, str(error))
+            forwarded["image_base64"] = base64.b64encode(data).decode()
+            result = await handler(request.override(tool_call={**call, "args": forwarded}))
+            if isinstance(result, ToolMessage):
+                return result.model_copy(update={"artifact": None})
+            return result
         if decision.args == call.get("args"):
             return await handler(request)
         return await handler(request.override(tool_call={**call, "args": decision.args}))

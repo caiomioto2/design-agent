@@ -29,7 +29,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -37,7 +37,12 @@ from pydantic import BaseModel, Field
 
 from design_agent.config import Settings
 from design_agent.runtime import maintenance
-from design_agent.runtime.local import LocalRuntime, build_local_runtime, final_text
+from design_agent.runtime.local import (
+    ApprovalPending,
+    LocalRuntime,
+    build_local_runtime,
+    final_text,
+)
 from design_agent.runtime.persistence import open_persistence, workspace_of
 from design_agent.tools.mcp import load_mcp_tools, servers_for_runtime
 from design_agent.tools.paper import PaperPolicy, admit_paper_tools
@@ -59,6 +64,17 @@ class MessageOut(BaseModel):
     reply: str
     files: list[str]
     working: bool
+    approvals: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ReviewDecision(BaseModel):
+    type: Literal["approve", "reject"]
+    message: str = Field(default="", max_length=4000)
+
+
+class ReviewIn(BaseModel):
+    interrupt_id: str = Field(min_length=1, max_length=200)
+    decisions: list[ReviewDecision] = Field(min_length=1, max_length=100)
 
 
 class Updates(BaseModel):
@@ -175,11 +191,44 @@ def create_app(
     ) -> MessageOut:
         await _owned(request, thread_id, caller, create=True)
         state: ApiState = request.app.state.api
-        added = await state.runtime.ask(body.text, thread_id=thread_id)
+        try:
+            added = await state.runtime.ask(body.text, thread_id=thread_id)
+        except ApprovalPending as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
         return MessageOut(
             reply=final_text(added),
             files=_files(state.runtime, thread_id),
             working=state.runtime.busy(),
+            approvals=await state.runtime.pending_approvals(thread_id),
+        )
+
+    @app.get("/threads/{thread_id}/approvals")
+    async def approvals(
+        thread_id: str, request: Request, caller: str = Depends(_caller)
+    ) -> list[dict[str, Any]]:
+        await _owned(request, thread_id, caller, create=False)
+        state: ApiState = request.app.state.api
+        return await state.runtime.pending_approvals(thread_id)
+
+    @app.post("/threads/{thread_id}/approvals", response_model=MessageOut)
+    async def review(
+        thread_id: str, body: ReviewIn, request: Request, caller: str = Depends(_caller)
+    ) -> MessageOut:
+        await _owned(request, thread_id, caller, create=False)
+        state: ApiState = request.app.state.api
+        try:
+            added = await state.runtime.review(
+                thread_id,
+                interrupt_id=body.interrupt_id,
+                decisions=[decision.model_dump() for decision in body.decisions],
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return MessageOut(
+            reply=final_text(added),
+            files=_files(state.runtime, thread_id),
+            working=state.runtime.busy(),
+            approvals=await state.runtime.pending_approvals(thread_id),
         )
 
     @app.post("/threads/{thread_id}/attachments")
