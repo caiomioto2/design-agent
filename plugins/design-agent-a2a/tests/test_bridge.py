@@ -59,6 +59,8 @@ class Runtime:
             )
         if request.url.path == "/projects":
             return httpx.Response(200, json=[])
+        if request.url.path.startswith("/artifact-owner/"):
+            return httpx.Response(200, json={"unique": True})
         if request.url.path == "/state":
             return httpx.Response(200, json=wire_state(self.pending))
         if request.url.path == "/stream":
@@ -237,4 +239,34 @@ async def test_artifact_boundaries_and_text_limit(tmp_path):
     with pytest.raises(ValueError):
         await backend.read_artifact("another-thread", "example", "BRIEF.md")
     assert (await backend.read_artifact(THREAD, "example", "BRIEF.md"))["text"] == "Approved brief"
+    await backend.client.aclose()
+
+
+@pytest.mark.parametrize("swap_directory", [False, True])
+async def test_artifact_read_rejects_replacement_after_path_validation(
+    tmp_path, monkeypatch, swap_directory
+):
+    runtime = Runtime(tmp_path)
+    backend = runtime.backend()
+    root = tmp_path / "workspace/out" / THREAD
+    root.mkdir(parents=True)
+    (root / "result.txt").write_text("permitted")
+    private = tmp_path / "private-area"
+    private.mkdir()
+    (private / "result.txt").write_text("must not escape the selected conversation")
+    original = backend.file_path
+
+    def swap(*args):
+        safe = original(*args)
+        if swap_directory:
+            root.rename(root.with_name("moved"))
+            root.symlink_to(private, target_is_directory=True)
+        else:
+            safe.unlink()
+            safe.symlink_to(private / "result.txt")
+        return safe
+
+    monkeypatch.setattr(backend, "file_path", swap)
+    with pytest.raises(ValueError, match="changed or is not accessible"):
+        backend.open_artifact(THREAD, "deliverables", "result.txt")
     await backend.client.aclose()

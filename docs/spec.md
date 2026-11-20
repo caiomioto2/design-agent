@@ -1107,3 +1107,22 @@ pull request (not in the repository).
 | 7 | Repository name final (`design-agent` vs the internal codename), org, and whether to publish to PyPI | LangChain marketing / OSS | Slice 10 |
 | 8 | Legal review: fonts, sample brand, vendored skills, D2 binary in image, partner trademarks and logos in README | Legal | Slice 10 |
 | 9 | Release timing relative to the launch blog and webinar | Marketing | none (repo must not block the blog) |
+
+
+## Optional A2A completion in Codex
+
+An operator may associate a stable A2A submission with an existing Codex App Server thread outside
+model-authored content. Turn completion and deliverable work completion are separate lifecycle
+scopes. Authoritative runtime helper/watch, pending approval and durable work state govern the
+latter. Success, failure and input-required are distinct outcomes.
+
+Lifecycle state and pending callbacks commit together. Authenticated callback ingress records
+before acknowledgement and deduplicates stable event IDs. Dispatch reconciles the current
+revision and authorized binding, steers an active turn with its current expected ID, or starts
+an idle turn on the same thread without changing permissions or model selection. Revocation,
+archival, outages and uncertain acceptance never select a different destination or blindly
+repeat generation. Existing submission retries, polling and bounded artifact reads remain.
+
+Acceptance uses real A2A and callback HTTP, Codex App Server 0.167.1 as an actual process, and a
+synthetic local model endpoint. No editor, Orca, live provider charge or automatic approval is
+required. See [configuration, receipts and recovery](a2a-codex.md).

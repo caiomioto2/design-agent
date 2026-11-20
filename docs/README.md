@@ -50,3 +50,5 @@ which one fits.
 
 [Contributing](../CONTRIBUTING.md) · [Agent instructions](../AGENTS.md) · [Security](../SECURITY.md) ·
 [Changelog](../CHANGELOG.md)
+
+- [A2A completion in Codex](a2a-codex.md): local bridge, authorized callbacks, App Server continuation and delivery recovery.

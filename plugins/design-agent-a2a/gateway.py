@@ -6,11 +6,15 @@ import asyncio
 import hashlib
 import hmac
 import json
+import mimetypes
 import sqlite3
+import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from urllib.parse import quote
 
+import httpx
 from a2a.helpers import (
     get_message_text,
     new_task_from_user_message,
@@ -36,11 +40,16 @@ from a2a.types import (
     TaskStatus,
 )
 from a2a.utils.errors import InvalidParamsError, TaskNotCancelableError, UnsupportedOperationError
+from google.protobuf.json_format import MessageToDict
 from starlette.applications import Starlette
-from starlette.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
+from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 from backend import Backend
+from callbacks import deliver
+from delivery_store import DeliveryStore
+from lifecycle import MAX_BODY, Artifact, Event
 
 TERMINAL = {
     TaskState.TASK_STATE_COMPLETED,
@@ -53,6 +62,7 @@ TERMINAL = {
 class Store(TaskStore):
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.touch(mode=0o600, exist_ok=True)
         self.db = sqlite3.connect(path)
         path.chmod(0o600)
         self.db.executescript("""
@@ -60,6 +70,7 @@ class Store(TaskStore):
           CREATE TABLE IF NOT EXISTS submissions (message TEXT PRIMARY KEY, fingerprint TEXT, task TEXT);
           CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, context TEXT, area TEXT, path TEXT);
         """)
+        self.delivery = DeliveryStore(self.db)
         # A process restart never replays an uncertain external turn.
         for (blob,) in self.db.execute("SELECT payload FROM tasks").fetchall():
             task = Task.FromString(blob)
@@ -73,26 +84,69 @@ class Store(TaskStore):
                     )
                 )
                 task.metadata.update({"outcome_unknown": True})
-                self.db.execute(
-                    "UPDATE tasks SET payload=? WHERE id=?", (task.SerializeToString(), task.id)
-                )
+                self._record(task)
         self.db.commit()
 
-    async def save(self, task, context) -> None:
+    async def save(self, task, context) -> None:  # noqa: ARG002 - public SDK interface
+        with self.db:
+            self._record(task)
+
+    def _record(self, task):
         self.db.execute(
             "INSERT OR REPLACE INTO tasks VALUES (?,?)", (task.id, task.SerializeToString())
         )
-        self.db.commit()
+        outcomes = {
+            TaskState.TASK_STATE_COMPLETED: "completed",
+            TaskState.TASK_STATE_FAILED: "failed",
+            TaskState.TASK_STATE_INPUT_REQUIRED: "input-required",
+        }
+        if task.status.state not in outcomes:
+            return
+        row = self.db.execute("SELECT message FROM submissions WHERE task=?", (task.id,)).fetchone()
+        if not row:
+            return
+        submission = row[0]
+        self.delivery.associate(submission, task.context_id, task.id)
+        previous = self.delivery.latest(submission)
+        meta = MessageToDict(task.metadata)
+        content = dict(
+            submission_id=submission,
+            task_id=task.id,
+            context_id=task.context_id,
+            state=outcomes[task.status.state],
+            scope=meta.get("completion_scope", "turn"),
+            result_revision=str(meta.get("result_revision", ""))[:256],
+            text=get_message_text(task.status.message)[:8000],
+            artifacts=[Artifact(**a) for a in meta.get("references", [])[:30]],
+            limitation=str(
+                meta.get("limitation")
+                or ("Execution outcome may be uncertain." if meta.get("outcome_unknown") else "")
+            )[:1000],
+        )
+        if previous and all(
+            previous.model_dump()[k] == (v if k != "artifacts" else [a.model_dump() for a in v])
+            for k, v in content.items()
+        ):
+            return
+        revision = previous.revision + 1 if previous else 1
+        event = Event(
+            event_id=str(uuid.uuid5(uuid.NAMESPACE_URL, task.id + ":" + str(revision))),
+            revision=revision,
+            **content,
+        )
+        while len(event.body()) > MAX_BODY and event.artifacts:
+            event = event.model_copy(update={"artifacts": event.artifacts[:-1]})
+        self.delivery.emit(event)
 
-    async def get(self, task_id, context) -> Task | None:
+    async def get(self, task_id, context) -> Task | None:  # noqa: ARG002 - public SDK interface
         row = self.db.execute("SELECT payload FROM tasks WHERE id=?", (task_id,)).fetchone()
         return Task.FromString(row[0]) if row else None
 
-    async def delete(self, task_id, context) -> None:
+    async def delete(self, task_id, context) -> None:  # noqa: ARG002 - public SDK interface
         self.db.execute("DELETE FROM tasks WHERE id=?", (task_id,))
         self.db.commit()
 
-    async def list(self, params, context):
+    async def list(self, params, context):  # noqa: ARG002 - public SDK interface
         tasks = [
             Task.FromString(row[0])
             for row in self.db.execute("SELECT payload FROM tasks ORDER BY rowid DESC")
@@ -129,8 +183,8 @@ class Store(TaskStore):
             if row[0] != fingerprint:
                 raise InvalidParamsError(message="messageId already belongs to different content")
             return row[1]
-        self.db.execute("INSERT INTO submissions VALUES (?,?,?)", (message, fingerprint, task))
-        self.db.commit()
+        with self.db:
+            self.db.execute("INSERT INTO submissions VALUES (?,?,?)", (message, fingerprint, task))
         return None
 
     def artifact(self, thread: str, area: str, path: str) -> str:
@@ -146,7 +200,7 @@ class FixedID(IDGenerator):
     def __init__(self, value: str):
         self.value = value
 
-    def generate(self, context) -> str:
+    def generate(self, context) -> str:  # noqa: ARG002 - public SDK interface
         return self.value
 
 
@@ -185,7 +239,9 @@ class Executor(AgentExecutor):
                 await updater.add_artifact(
                     [new_text_part(result["text"][:64_000])], name="Design Agent response"
                 )
+                references = []
                 for item in await self.backend.artifacts(context.context_id, limit=30):
+                    references.append({"area": item["area"], "path": item["path"]})
                     identifier = self.store.artifact(context.context_id, item["area"], item["path"])
                     from a2a.types import Part
 
@@ -202,10 +258,25 @@ class Executor(AgentExecutor):
                 state = (
                     TaskState.TASK_STATE_INPUT_REQUIRED
                     if result["state"] == "input-required"
+                    else TaskState.TASK_STATE_FAILED
+                    if result["state"] == "failed"
                     else TaskState.TASK_STATE_COMPLETED
                 )
-                await updater.update_status(state, new_text_message(result["text"][:8000]))
-            except Exception as error:
+                await updater.update_status(
+                    state,
+                    new_text_message(result["text"][:8000]),
+                    metadata={
+                        "completion_scope": result.get("scope", "turn"),
+                        "work_since": result.get("work_since", time.time()),
+                        "runtime_instance": result.get("runtime_instance", ""),
+                        "monitor_work": result["state"] == "completed"
+                        and result.get("scope") != "work",
+                        "result_revision": result.get("result_revision", ""),
+                        "limitation": result.get("limitation", ""),
+                        "references": references,
+                    },
+                )
+            except Exception as error:  # noqa: BLE001 - external failures must never expose credentials
                 # Provider exceptions may contain credentials; return only the exception class.
                 await updater.update_status(
                     TaskState.TASK_STATE_FAILED,
@@ -215,7 +286,7 @@ class Executor(AgentExecutor):
                     metadata={"outcome_unknown": True},
                 )
 
-    async def cancel(self, context, event_queue) -> None:
+    async def cancel(self, context, event_queue) -> None:  # noqa: ARG002 - public SDK interface
         raise TaskNotCancelableError(
             message="This bridge cannot safely cancel provider work. Inspect the task and Design Agent context."
         )
@@ -232,7 +303,7 @@ class Handler(DefaultRequestHandler):
         self.backend, self.store = backend, store
         self.lock = asyncio.Lock()
 
-    async def on_message_send_stream(self, params, context):
+    async def on_message_send_stream(self, params, context):  # noqa: ARG002 - public SDK interface
         raise UnsupportedOperationError(message="Use SendMessage and GetTask")
         yield  # pragma: no cover - the SDK interface is an async iterator
 
@@ -280,6 +351,11 @@ class Handler(DefaultRequestHandler):
                     raise InvalidParamsError(message="Choose a known conversation") from error
             else:
                 message.context_id = "a2a-" + str(uuid.uuid4())
+            binding = self.store.delivery.binding(message.message_id, enabled=False)
+            if binding and (not binding[4] or (binding[2] and binding[2] != message.context_id)):
+                raise InvalidParamsError(
+                    message="Submission binding is revoked or belongs to another context"
+                )
             self.store.reserve(message.message_id, fingerprint, task_id)
             return await super().on_message_send(params, context)
 
@@ -338,7 +414,7 @@ def create_app(backend: Backend, store: Store, token: str, url: str):
             return JSONResponse(
                 {"error": "Invalid conversation or artifact selector"}, status_code=400
             )
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - external failures must never expose credentials
             return JSONResponse({"error": type(error).__name__}, status_code=502)
 
     async def artifact(request):
@@ -349,20 +425,62 @@ def create_app(backend: Backend, store: Store, token: str, url: str):
             return JSONResponse({"error": "Artifact not found"}, status_code=404)
         try:
             await backend.known(row[0])
+            if row[1] == "deliverables":
+                await backend.artifact_owner(row[0])
             path = backend.file_path(*row)
-            return FileResponse(path, filename=path.name)
-        except ValueError:
+            file = backend.open_artifact(*row)
+
+            def chunks():
+                with file:
+                    while chunk := file.read(64_000):
+                        yield chunk
+
+            return StreamingResponse(
+                chunks(),
+                media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+                headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(path.name)},
+                background=BackgroundTask(file.close),
+            )
+        except (ValueError, httpx.HTTPError):
             return JSONResponse({"error": "Artifact not found"}, status_code=404)
 
+    async def current(request):
+        binding = store.delivery.binding(request.path_params["submission"])
+        if not binding or not store.delivery.consumer(binding[0]):
+            return JSONResponse({"error": "Binding not authorized"}, status_code=403)
+        await reconcile_work(backend, store)
+        event = store.delivery.latest(request.path_params["submission"])
+        return JSONResponse(
+            event.model_dump() if event else {"error": "Not found"},
+            status_code=200 if event else 404,
+        )
+
     @asynccontextmanager
-    async def lifespan(app):
-        yield
-        await backend.client.aclose()
-        store.db.close()
+    async def lifespan(_app):
+        async def work():
+            async with httpx.AsyncClient(follow_redirects=False) as client:
+                while True:
+                    try:
+                        await reconcile_work(backend, store)
+                        await deliver(store.delivery, client)
+                    except (httpx.HTTPError, ValueError, OSError):
+                        pass  # Durable pending rows remain available on the next pass.
+                    await asyncio.sleep(2)
+
+        worker = asyncio.create_task(work())
+        try:
+            yield
+        finally:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
+            await backend.client.aclose()
+            store.db.close()
 
     routes = [
         *create_agent_card_routes(card),
         *create_jsonrpc_routes(handler, "/rpc"),
+        Route("/callbacks/state/{submission}", current),
         Route("/read/{kind}", data),
         Route("/artifacts/{id}", artifact),
     ]
@@ -383,3 +501,54 @@ def create_app(backend: Backend, store: Store, token: str, url: str):
             await self.wrapped(scope, receive, send)
 
     return Authorized(app)
+
+
+async def reconcile_work(backend, store):
+    """Read runtime state, never run a model, and atomically advance a pending work result."""
+    for (blob,) in store.db.execute("SELECT payload FROM tasks").fetchall():
+        task = Task.FromString(blob)
+        meta = MessageToDict(task.metadata)
+        if not meta.get("monitor_work"):
+            continue
+        result = await backend.completion(task.context_id, float(meta["work_since"]))
+        if meta.get("runtime_instance") and meta["runtime_instance"] != result.get(
+            "runtime_instance"
+        ):
+            task.metadata.update(
+                {
+                    "monitor_work": False,
+                    "limitation": "Runtime restarted before work completion was established. Inspect the Design Agent context; only turn completion is known.",
+                }
+            )
+            await store.save(task, None)
+            continue
+        if result.get("scope") != "work" and result.get("state", "completed") == "completed":
+            continue
+        # Another submission on the same context makes attribution ambiguous.
+        newer = store.db.execute(
+            "SELECT b.task FROM submissions a JOIN submissions b ON b.rowid>a.rowid WHERE a.task=?",
+            (task.id,),
+        ).fetchall()
+        peers = [await store.get(row[0], None) for row in newer]
+        if any(t and t.context_id == task.context_id for t in peers):
+            continue
+        task.status.state = {
+            "completed": TaskState.TASK_STATE_COMPLETED,
+            "failed": TaskState.TASK_STATE_FAILED,
+            "input-required": TaskState.TASK_STATE_INPUT_REQUIRED,
+        }[result["state"]]
+        task.status.message.CopyFrom(new_text_message(result["text"]))
+        refs = [
+            {"area": a["area"], "path": a["path"]}
+            for a in await backend.artifacts(task.context_id, limit=30)
+        ]
+        task.metadata.update(
+            {
+                "completion_scope": result["scope"],
+                "monitor_work": False,
+                "result_revision": result["result_revision"],
+                "limitation": result["limitation"],
+                "references": refs,
+            }
+        )
+        await store.save(task, None)

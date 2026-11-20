@@ -114,6 +114,7 @@ def create_shared_app(
     directory.runtime = runtime
     runtime.conversations = directory
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    runtime_instance = uuid.uuid4().hex
 
     def authorized(request: Request) -> None:
         expected = "Bearer " + token
@@ -209,6 +210,36 @@ def create_shared_app(
     async def state(body: dict[str, Any]) -> Any:
         snapshot = await runtime.graph.aget_state(config(unpack(body.get("config"))))
         return pack(snapshot)
+
+    @app.get("/work/{selected}")
+    async def work(selected: str, since: float = 0) -> dict[str, Any]:
+        from design_agent.surfaces.work_status import work_status
+
+        current = config({"configurable": {"thread_id": selected}})["configurable"]["thread_id"]
+        return {
+            **await work_status(runtime, store, current, since),
+            "runtime_instance": runtime_instance,
+        }
+
+    @app.get("/artifact-owner/{selected}")
+    async def artifact_owner(selected: str) -> dict[str, bool]:
+        from design_agent.tools.delivery import LocalOutputAdapter
+
+        current = config({"configurable": {"thread_id": selected}})["configurable"]["thread_id"]
+        adapter = LocalOutputAdapter(runtime.out_dir)
+        folder = adapter.folder(current)
+        found = False
+        # A capped conversation listing cannot prove unique legacy folder ownership.
+        async for checkpoint in runtime.graph.checkpointer.alist(None):
+            configurable = checkpoint.config.get("configurable", {})
+            candidate = configurable.get("thread_id")
+            if configurable.get("checkpoint_ns") or not isinstance(candidate, str):
+                continue
+            if adapter.folder(candidate) == folder:
+                if candidate != current:
+                    return {"unique": False}
+                found = True
+        return {"unique": found}
 
     @app.post("/update")
     async def update(body: dict[str, Any]) -> Any:

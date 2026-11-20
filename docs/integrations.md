@@ -207,3 +207,10 @@ and web dashboards to manage design tasks, execute steps, and download rendered 
 - `GET /ap/v1/agent/tasks/{task_id}/artifacts/{artifact_id}`: Direct binary streaming download via
   HTTP `FileResponse` with appropriate `Content-Type` headers (`image/png`, `video/mp4`, etc.).
 - `POST /ap/v1/agent/tasks/{task_id}/artifacts`: Multipart upload of input assets into the task.
+
+## Codex through A2A
+
+The optional [A2A bridge](a2a-codex.md) exposes bounded context/artifact reads and idempotent task
+submission. Host-registered callbacks can continue an existing Codex App Server thread when a
+turn ends or authoritative background work completes. Registration and credentials stay outside
+model tools. Polling remains available, and pending human approvals remain in Design Agent.

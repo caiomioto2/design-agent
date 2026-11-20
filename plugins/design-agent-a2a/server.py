@@ -35,6 +35,13 @@ class Peer:
         result.raise_for_status()
         return result.json()
 
+    async def current(self, submission: str):
+        from lifecycle import Event
+
+        response = await self.client.get("/callbacks/state/" + submission)
+        response.raise_for_status()
+        return Event.model_validate(response.json())
+
     async def rpc(self, method: str, params: dict[str, Any]) -> Any:
         result = await self.client.post(
             "/rpc",
@@ -62,7 +69,7 @@ def create_mcp(peer: Peer) -> FastMCP:
             return await awaitable
         except ToolError:
             raise
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - only a sanitized class reaches MCP
             raise ToolError(
                 f"Bridge request failed ({type(error).__name__}). Check the existing task/context before retrying."
             ) from None
@@ -132,7 +139,7 @@ def create_mcp(peer: Peer) -> FastMCP:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["serve", "mcp"])
+    parser.add_argument("mode", choices=["serve", "mcp", "receiver"])
     parser.add_argument(
         "--config",
         type=Path,
@@ -145,7 +152,38 @@ def main() -> None:
     args = parser.parse_args()
     values = config(args.config)
     url = loopback(values["A2A_URL"])
-    if args.mode == "serve":
+    if args.mode == "receiver":
+        import uvicorn
+
+        from codex_adapter import AppServer
+        from delivery_store import DeliveryStore
+        from receiver import Worker, create_receiver
+
+        endpoint = loopback(values["CALLBACK_URL"])
+        store = DeliveryStore.open(Path(values["CALLBACK_STATE"]), recover=True)
+        peer = Peer(
+            httpx.AsyncClient(
+                base_url=url,
+                headers={"Authorization": "Bearer " + values["A2A_TOKEN"]},
+                timeout=15,
+                follow_redirects=False,
+            )
+        )
+        token_file = Path(values["CODEX_TOKEN_FILE"]) if values.get("CODEX_TOKEN_FILE") else None
+        worker = Worker(
+            store, peer, adapter_factory=lambda endpoint: AppServer(endpoint, token_file=token_file)
+        )
+        try:
+            uvicorn.run(
+                create_receiver(store, worker),
+                host="127.0.0.1",
+                port=httpx.URL(endpoint).port,
+                access_log=False,
+                log_level="warning",
+            )
+        finally:
+            store.db.close()
+    elif args.mode == "serve":
         import uvicorn
 
         from gateway import Store, create_app

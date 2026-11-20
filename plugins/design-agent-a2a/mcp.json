@@ -4,6 +4,7 @@
     "design-agent": {
       "type": "stdio",
       "command": "uv",
+      "env": {"UV_PROJECT_ENVIRONMENT": "${PLUGIN_ROOT}/.venv"},
       "args": ["run", "--frozen", "--project", "${PLUGIN_ROOT}", "python", "${PLUGIN_ROOT}/server.py", "mcp"]
     }
   }

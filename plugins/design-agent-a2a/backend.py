@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+import os
 import re
+import stat
+import time
 from pathlib import Path
 from typing import Any
 
@@ -146,10 +149,42 @@ class Backend:
             raise ValueError("Artifact does not exist in the selected conversation")
         return resolved
 
+    async def artifact_owner(self, thread: str):
+        response = await self.client.get("/artifact-owner/" + thread)
+        response.raise_for_status()
+        if not response.json().get("unique"):
+            raise ValueError("Deliverable folder ownership is ambiguous")
+
+    def open_artifact(self, thread: str, area: str, relative: str):
+        """Open without following a replaced file or directory, including the root."""
+        safe = self.file_path(thread, area, relative)
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+        descriptor = os.open(safe.anchor, flags | os.O_DIRECTORY)
+        try:
+            for part in safe.parts[1:-1]:
+                child = os.open(part, flags | os.O_DIRECTORY, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+            file_descriptor = os.open(safe.name, flags, dir_fd=descriptor)
+            if not stat.S_ISREG(os.fstat(file_descriptor).st_mode):
+                os.close(file_descriptor)
+                raise ValueError("Artifact must be a regular file")
+            return os.fdopen(file_descriptor, "rb")
+        except OSError as error:
+            raise ValueError("Artifact changed or is not accessible") from error
+        finally:
+            os.close(descriptor)
+
     async def artifacts(self, thread: str, limit: int = 100) -> list[dict[str, Any]]:
         await self.known(thread)
         folder = re.sub(r"[^A-Za-z0-9._ -]+", "-", thread)[:80]
-        roots = {"deliverables": self.root / "workspace/out" / folder, **self.project_roots(thread)}
+        roots = {**self.project_roots(thread)}
+        try:
+            await self.artifact_owner(thread)
+        except (httpx.HTTPError, ValueError):
+            pass  # An ambiguous legacy folder is never exposed as this thread's files.
+        else:
+            roots["deliverables"] = self.root / "workspace/out" / folder
         result = []
         for area, root in roots.items():
             if not root.is_dir():
@@ -178,9 +213,14 @@ class Backend:
 
     async def read_artifact(self, thread: str, area: str, path: str) -> dict[str, Any]:
         await self.known(thread)
+        if area == "deliverables":
+            await self.artifact_owner(thread)
         safe = self.file_path(thread, area, path)
-        result: dict[str, Any] = {"host_path": str(safe), "bytes": safe.stat().st_size}
-        with safe.open("rb") as file:
+        with self.open_artifact(thread, area, path) as file:
+            result: dict[str, Any] = {
+                "host_path": str(safe),
+                "bytes": os.fstat(file.fileno()).st_size,
+            }
             data = file.read(MAX_TEXT + 1)
         try:
             text = data[:MAX_TEXT].decode("utf-8")
@@ -191,7 +231,41 @@ class Backend:
             result["binary"] = True
         return result
 
+    async def completion(self, thread: str, since: float) -> dict[str, Any]:
+        response = await self.client.get("/work/" + thread, params={"since": since})
+        if response.status_code == 404:
+            return {"scope": "turn", "limitation": "Runtime completion evidence is unavailable."}
+        response.raise_for_status()
+        evidence = response.json()
+        state = evidence["snapshot"]["$snapshot"]
+        messages = state.get("values", {}).get("messages", [])
+        reply = next(
+            (
+                m["$message"]["data"].get("content", "")
+                for m in reversed(messages)
+                if m.get("$message", {}).get("type") == "ai"
+            ),
+            "",
+        )
+        if not isinstance(reply, str):
+            reply = json.dumps(reply, ensure_ascii=False)
+        return {
+            "scope": "work" if evidence.get("settled") else "turn",
+            "runtime_instance": evidence.get("runtime_instance", ""),
+            "state": "input-required"
+            if evidence.get("pending_approval")
+            else "failed"
+            if evidence.get("failed")
+            else "completed",
+            "text": reply[:8000],
+            "result_revision": str(state.get("created_at") or ""),
+            "limitation": ""
+            if evidence.get("settled")
+            else "Outstanding runtime work or approval; deliverable completion is not established.",
+        }
+
     async def turn(self, thread: str, text: str) -> dict[str, Any]:
+        since = time.time()
         before = await self.snapshot(thread)
         if self.pending(before):
             return {
@@ -229,7 +303,10 @@ class Backend:
             ),
             "Turn finished; inspect the context and artifacts.",
         )
+        result = await self.completion(thread, since)
         return {
             "state": "completed",
             "text": reply if isinstance(reply, str) else json.dumps(reply, ensure_ascii=False),
+            **result,
+            "work_since": since,
         }

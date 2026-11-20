@@ -55,3 +55,21 @@ and wake-up replies post there. The same middleware draws progress and the foote
 The API returns each turn's reply and delivered files, and background news through
 `GET /threads/{id}/updates` ([self-hosting](../self-hosting.md)). The CLI prints each step's tool
 name as it runs and stays open while background work continues.
+
+
+## Local A2A and Codex completion
+
+The optional [A2A bridge](../a2a-codex.md) versions the MCP/A2A sidecar under
+`plugins/design-agent-a2a/`. Its SDK TaskStore commits lifecycle events and an outbox alongside
+terminal task state. A separate authenticated receiver commits an inbox before acknowledgement,
+reconciles the current task revision and routes external data to an immutable host-registered
+Codex consumer/thread binding. The App Server adapter uses public JSON-RPC over loopback
+WebSockets. Active turns receive `turn/steer`; idle or resumed threads receive `turn/start`
+without configuration or permission overrides.
+
+`surfaces/work_status.py` reads graph state, helper/watch registries, durable work ledgers and
+lead wake-up state without model calls. A turn with outstanding work stays turn-scoped. A runtime
+restart or overlapping context work prevents an unsupported claim of deliverable completion.
+The receiver records intent before generation and retains ambiguous acceptance for history
+reconciliation, never blind replay. Callback receipt, Codex input acceptance and finished Codex
+work are separate states. No callback or background hook grants approval authority.
