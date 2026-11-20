@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "design-agent-a2a",
+  "version": "0.1.0",
+  "description": "Comunicação local com o Design Agent por A2A: contexto, tarefas e entregas.",
+  "license": "Apache-2.0",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Design Agent A2A",
+        "shortDescription": "Contexto, tarefas e entregas",
+        "category": "Productivity",
+        "capabilities": [],
+        "defaultPrompt": "Consulte o contexto e as entregas do meu projeto no Design Agent."
+      }
+    }
+  }
+}

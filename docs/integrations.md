@@ -190,3 +190,11 @@ call, its durable marker prevents replay of that tool-call ID; reconcile provide
 trying another operation. Diagnostics log the negotiated protocol, hashed call/request IDs
 and response action, without headers, tool arguments or provider prompts. The modern MCP
 adapter remains in use when the server negotiates a modern protocol.
+
+
+## Codex through A2A
+
+The optional [A2A bridge](a2a-codex.md) exposes bounded context/artifact reads and idempotent task
+submission. Host-registered callbacks can continue an existing Codex App Server thread when a
+turn ends or authoritative background work completes. Registration and credentials stay outside
+model tools. Polling remains available, and pending human approvals remain in Design Agent.
